@@ -2144,7 +2144,9 @@ public:
     rewriter.replaceOpWithNewOp<DST_OP>(op, op.getSrcs()[0]);                  \
     return success();                                                          \
   }
-
+    POPULATE_UNARY_OP("isnan", math::IsNaNOp);
+    POPULATE_UNARY_OP("isinf", math::IsInfOp);
+    POPULATE_UNARY_OP("isfinite", math::IsFiniteOp);
     POPULATE_UNARY_OP("fabsf", math::AbsFOp);
     POPULATE_UNARY_OP("fabs", math::AbsFOp);
     POPULATE_UNARY_OP("sinf", math::SinOp);
