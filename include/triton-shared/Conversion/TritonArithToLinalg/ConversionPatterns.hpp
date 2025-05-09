@@ -2259,4 +2259,3 @@ static void populateExternElementwiseOpToMLIROps(RewritePatternSet &patterns) {
 } // namespace
 
 #endif
-
