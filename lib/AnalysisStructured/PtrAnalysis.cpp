@@ -1122,6 +1122,10 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op,
 
   auto loadOp = builder.create<tts::LoadOp>(loc, ptr, dims, scalarOther);
 
+  if (op->hasAttr("my_hints")) {
+    loadOp->setAttr("my_hints", op->getAttr("my_hints"));
+  }
+
   LLVM_DEBUG({
     llvm::dbgs() << "creating tts::load:\n";
     loadOp->dump();
