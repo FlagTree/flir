@@ -577,6 +577,17 @@ private:
 
     auto alloc = rewriter.create<memref::AllocOp>(
         loc, MemRefType::get(tensorType.getShape(), elemType));
+    if (op->hasAttr("my_hints")) {
+      auto hintAttr = dyn_cast<StringAttr>(op->getAttr("my_hints"));
+      if (hintAttr && hintAttr.getValue() == "shared_memory") {
+        // TODO: memorySpace value 8 is only for aipu backend
+        auto memorySpace =
+            IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
+        alloc = rewriter.create<memref::AllocOp>(
+            loc, MemRefType::get(tensorType.getShape(), elemType, nullptr,
+                                 memorySpace));
+      }
+    }
 
     // No mask
     assert(!other && "other value used in non-masked load");
@@ -625,6 +636,17 @@ private:
 
     auto alloc = rewriter.create<memref::AllocOp>(
         loc, MemRefType::get(tensorType.getShape(), elemType));
+    if (op->hasAttr("my_hints")) {
+      auto hintAttr = dyn_cast<StringAttr>(op->getAttr("my_hints"));
+      if (hintAttr && hintAttr.getValue() == "shared_memory") {
+        // TODO: memorySpace value 8 is only for aipu backend
+        auto memorySpace =
+            IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
+        alloc = rewriter.create<memref::AllocOp>(
+            loc, MemRefType::get(tensorType.getShape(), elemType, nullptr,
+                                 memorySpace));
+      }
+    }
 
     SmallVector<OpFoldResult> mixedDims = op.getMixedMaskDims();
 
