@@ -160,8 +160,6 @@ public:
 
     target.addLegalOp<UnrealizedConversionCastOp>();
 
-    target.addIllegalOp<memref::CopyOp>();
-
     PtrToUnrankedMemrefConverter typeConverter;
 
     triton::populateStructuredToMemrefConversionPatterns(patterns,
