@@ -7,6 +7,7 @@
 
 #include "mlir/Dialect/Ptr/IR/PtrDialect.h"
 #include "triton-shared/Conversion/StructuredToMemref/StructuredToMemref.h"
+#include "triton-shared/Conversion/StructuredToMemref_FlagTree/StructuredToMemrefFlagTree.h"
 #include "triton-shared/Conversion/TritonArithToLinalg/TritonArithToLinalg.h"
 #include "triton-shared/Conversion/TritonPtrToMemref/TritonPtrToMemref.h"
 #include "triton-shared/Conversion/TritonToLinalgExperimental/ReconcilePtrCasts.h"
@@ -70,6 +71,7 @@ public:
     // Running this now may be too invasive and cause many IR changes, so
     // leave as a TODO for now.
     pm.addPass(createStructuredToMemrefPass());
+    pm.addPass(createStructuredToMemrefFlagTreePass());
     pm.addPass(createUnstructuredToMemrefPass());
     pm.addPass(createTritonPtrToMemrefPass());
     pm.addPass(createTritonToPtrPass());
