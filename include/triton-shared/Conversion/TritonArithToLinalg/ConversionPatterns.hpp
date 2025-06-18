@@ -12,6 +12,7 @@
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/PtrAnalysis.h"
 #include "triton-shared/Dialect/TritonTilingExt/IR/TritonTilingExtDialect.h"
+#include "triton-shared/Dialect/MathExt/IR/MathExtDialect.h"
 #include "triton-shared/Utils/Utils.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"
@@ -2122,6 +2123,7 @@ public:
     POPULATE_BINARY_OP("__nv_atan2", math::Atan2Op);
     POPULATE_BINARY_OP("__nv_powf", math::PowFOp);
     POPULATE_BINARY_OP("__nv_pow", math::PowFOp);
+    POPULATE_BINARY_OP("__fmod", math::FModOp);
 
 #undef POPULATE_BINARY_OP
     return failure();
