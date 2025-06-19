@@ -2123,7 +2123,8 @@ public:
     POPULATE_BINARY_OP("__nv_atan2", math::Atan2Op);
     POPULATE_BINARY_OP("__nv_powf", math::PowFOp);
     POPULATE_BINARY_OP("__nv_pow", math::PowFOp);
-    POPULATE_BINARY_OP("__fmod", math::FModOp);
+    POPULATE_BINARY_OP("fmod", mathext::FModOp);
+    POPULATE_BINARY_OP("powf", math::PowFOp);
 
 #undef POPULATE_BINARY_OP
     return failure();

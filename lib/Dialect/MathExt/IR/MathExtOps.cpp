@@ -8,12 +8,16 @@
 #include <optional>
 
 using namespace mlir;
-using namespace mlir::math;
+using namespace mlir::mathext;
 
 #define GET_OP_CLASSES
 #include "triton-shared/Dialect/MathExt/IR/MathExtOps.cpp.inc"
 
-OpFoldResult math::FModOp::fold(FoldAdaptor adaptor) {
+//===----------------------------------------------------------------------===//
+// FModOp folder
+//===----------------------------------------------------------------------===//
+
+OpFoldResult mathext::FModOp::fold(FoldAdaptor adaptor) {
   return constFoldBinaryOp<FloatAttr>(adaptor.getOperands(),
                                       [](const APFloat &a, const APFloat &b) {
                                         APFloat result(a);
@@ -23,4 +27,14 @@ OpFoldResult math::FModOp::fold(FoldAdaptor adaptor) {
                                         (void)result.mod(b);
                                         return result;
                                       });
+}
+
+/// Materialize an integer or floating point constant.
+Operation *mathext::MathExtDialect::materializeConstant(OpBuilder &builder,
+                                                        Attribute value, Type type,
+                                                        Location loc) {
+  if (auto poison = dyn_cast<ub::PoisonAttr>(value))
+    return builder.create<ub::PoisonOp>(loc, type, poison);
+
+  return arith::ConstantOp::materialize(builder, value, type, loc);
 }

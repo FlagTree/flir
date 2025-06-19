@@ -1,17 +1,16 @@
-#ifndef MathEXT_OPS
-#define MathEXT_OPS
+#ifndef MATHEXT_OPS
+#define MATHEXT_OPS
 
+include "triton-shared/Dialect/MathExt/IR/MathExtDialect.td"
 include "mlir/Dialect/Arith/IR/ArithBase.td"
 include "mlir/Dialect/Arith/IR/ArithOpsInterfaces.td"
-include "mlir/Dialect/Math/IR/MathBase.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/VectorInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-// Base class for math dialect ops. Ops in this dialect have no side effects and
-// can be applied element-wise to vectors and tensors.
+// Base class for math dialect ops.
 class MathExt_Op<string mnemonic, list<Trait> traits = []> :
-    Op<Math_Dialect, mnemonic, traits # [Pure,
+    Op<MathExt_Dialect, mnemonic, traits # [Pure,
     DeclareOpInterfaceMethods<VectorUnrollOpInterface>] #
     ElementwiseMappable.traits>;
 
@@ -102,11 +101,16 @@ class MathExt_FloatTernaryOp<string mnemonic, list<Trait> traits = []> :
                           attr-dict `:` type($result) }];
 }
 
-def Math_FModOp : MathExt_FloatBinaryOp<"fmod"> {
+//===----------------------------------------------------------------------===//
+// FModOp
+//===----------------------------------------------------------------------===//
+
+def MathExt_FModOp : MathExt_FloatBinaryOp<"fmod"> {
   let summary = "floating point modulo (remainder) operation";
   let description = [{
-    `%r = math.fmod %a, %b : f32`  
+    `%r = mathext.fmod %a, %b : f32`
   }];
   let hasFolder = 1;          
 }
-#endif // ARITHEXT_OPS
+
+#endif // MATHEXT_OPS
