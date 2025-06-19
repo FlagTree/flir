@@ -6,6 +6,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Ptr/IR/PtrDialect.h"
+#include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Conversion/StructuredToMemref/StructuredToMemref.h"
 #include "triton-shared/Conversion/TritonArithToLinalg/TritonArithToLinalg.h"
 #include "triton-shared/Conversion/TritonPtrToMemref/TritonPtrToMemref.h"
@@ -29,6 +30,7 @@
 
 using namespace mlir;
 using namespace triton;
+//using namespace mlir::mathext;
 
 #define GEN_PASS_CLASSES
 #include "triton-shared/Conversion/TritonToLinalgExperimental/Passes.h.inc"
@@ -41,6 +43,7 @@ class TritonToLinalgExperimentalPass
 public:
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<func::FuncDialect, arith::ArithDialect, math::MathDialect,
+                    mathext::MathExtDialect,
                     linalg::LinalgDialect, affine::AffineDialect,
                     scf::SCFDialect, tensor::TensorDialect,
                     bufferization::BufferizationDialect, memref::MemRefDialect,
