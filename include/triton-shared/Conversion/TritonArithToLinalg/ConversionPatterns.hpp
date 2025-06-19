@@ -12,7 +12,7 @@
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/PtrAnalysis.h"
 #include "triton-shared/Dialect/TritonTilingExt/IR/TritonTilingExtDialect.h"
-#include "triton-shared/Dialect/MathExt/IR/MathExtDialect.h"
+#include "triton-shared/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Utils/Utils.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"

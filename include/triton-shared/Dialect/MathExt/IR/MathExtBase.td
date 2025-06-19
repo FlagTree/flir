@@ -1,5 +1,5 @@
-#ifndef MATHEXT_DIALECT
-#define MATHEXT_DIALECT
+#ifndef MATHEXT_BASE
+#define MATHEXT_BASE
 
 include "mlir/IR/OpBase.td"
 
@@ -22,4 +22,4 @@ def MathExt_Dialect : Dialect {
   ];
 }
 
-#endif // MATHEXT_DIALECT 
+#endif // MATHEXT_BASE

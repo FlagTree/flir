@@ -1,4 +1,4 @@
-#include "triton-shared/Dialect/MathExt/IR/MathExtDialect.h"
+#include "triton-shared/Dialect/MathExt/IR/MathExt.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"

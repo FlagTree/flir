@@ -1,4 +1,4 @@
-set(LLVM_TARGET_DEFINITIONS MathExtDialect.td)
+set(LLVM_TARGET_DEFINITIONS MathExtBase.td)
 mlir_tablegen(MathExtDialect.h.inc -gen-dialect-decls)
 mlir_tablegen(MathExtDialect.cpp.inc -gen-dialect-defs)
 add_public_tablegen_target(MLIRMathExtDialectIncGen)

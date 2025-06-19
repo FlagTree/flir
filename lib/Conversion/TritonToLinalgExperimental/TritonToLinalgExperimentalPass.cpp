@@ -15,7 +15,7 @@
 #include "triton-shared/Conversion/TritonToStructured/TritonToStructured.h"
 #include "triton-shared/Conversion/TritonToUnstructured/TritonToUnstructured.h"
 #include "triton-shared/Conversion/UnstructuredToMemref/UnstructuredToMemref.h"
-#include "triton-shared/Dialect/MathExt/IR/MathExtDialect.h"
+#include "triton-shared/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Dialect/TPtr/IR/TPtrDialect.h"
 #include "triton-shared/Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 #include "triton-shared/Dialect/TritonTilingExt/IR/TritonTilingExtDialect.h"
