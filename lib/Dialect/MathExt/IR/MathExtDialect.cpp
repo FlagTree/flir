@@ -1,4 +1,4 @@
-#include "triton-shared/Dialect/MathExt/IR/MathExt.h"
+#include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -8,7 +8,7 @@
 using namespace mlir;
 using namespace mlir::mathext;
 
-#include "triton-shared/Dialect/MathExt/IR/MathExtDialect.cpp.inc"
+#include "mlir-ext/Dialect/MathExt/IR/MathExtDialect.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // MathExt dialect.
@@ -17,6 +17,6 @@ using namespace mlir::mathext;
 void MathExtDialect::initialize() {
   addOperations<
 #define GET_OP_LIST
-#include "triton-shared/Dialect/MathExt/IR/MathExtOps.cpp.inc"
+#include "mlir-ext/Dialect/MathExt/IR/MathExtOps.cpp.inc"
       >();
 }

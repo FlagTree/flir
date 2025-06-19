@@ -1,7 +1,7 @@
 #ifndef MATHEXT_OPS
 #define MATHEXT_OPS
 
-include "triton-shared/Dialect/MathExt/IR/MathExtBase.td"
+include "mlir-ext/Dialect/MathExt/IR/MathExtBase.td"
 include "mlir/Dialect/Arith/IR/ArithBase.td"
 include "mlir/Dialect/Arith/IR/ArithOpsInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"

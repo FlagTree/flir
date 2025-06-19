@@ -1,4 +1,4 @@
-#include "triton-shared/Dialect/MathExt/IR/MathExt.h"
+#include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/CommonFolders.h"
@@ -11,7 +11,7 @@ using namespace mlir;
 using namespace mlir::mathext;
 
 #define GET_OP_CLASSES
-#include "triton-shared/Dialect/MathExt/IR/MathExtOps.cpp.inc"
+#include "mlir-ext/Dialect/MathExt/IR/MathExtOps.cpp.inc"
 
 //===----------------------------------------------------------------------===//
 // FModOp folder

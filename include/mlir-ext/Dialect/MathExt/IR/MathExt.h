@@ -11,12 +11,12 @@
 //===----------------------------------------------------------------------===//
 // MathExt Dialect
 //===----------------------------------------------------------------------===//
-#include "triton-shared/Dialect/MathExt/IR/MathExtDialect.h.inc"
+#include "mlir-ext/Dialect/MathExt/IR/MathExtDialect.h.inc"
 
 //===----------------------------------------------------------------------===//
 // MathExt Dialect Operations
 //===----------------------------------------------------------------------===//
 #define GET_OP_CLASSES
-#include "triton-shared/Dialect/MathExt/IR/MathExtOps.h.inc"
+#include "mlir-ext/Dialect/MathExt/IR/MathExtOps.h.inc"
 
 #endif // MLIR_DIALECT_MATHEXT_IR_MATHEXT_H_
