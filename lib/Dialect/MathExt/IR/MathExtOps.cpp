@@ -29,6 +29,19 @@ OpFoldResult mathext::FModOp::fold(FoldAdaptor adaptor) {
                                       });
 }
 
+//===----------------------------------------------------------------------===//
+// DivRzOp folder
+//===----------------------------------------------------------------------===//
+
+OpFoldResult mathext::DivRzOp::fold(FoldAdaptor adaptor) {
+  return constFoldBinaryOp<FloatAttr>(adaptor.getOperands(),
+                                      [](const APFloat &a, const APFloat &b) {
+                                        APFloat result(a);
+                                        result.divide(b, APFloat::rmTowardZero);
+                                        return result;
+                                      });
+}
+
 /// Materialize an integer or floating point constant.
 Operation *mathext::MathExtDialect::materializeConstant(OpBuilder &builder,
                                                         Attribute value, Type type,

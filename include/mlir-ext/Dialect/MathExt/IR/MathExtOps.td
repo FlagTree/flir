@@ -110,7 +110,19 @@ def MathExt_FModOp : MathExt_FloatBinaryOp<"fmod"> {
   let description = [{
     `%r = mathext.fmod %a, %b : f32`
   }];
-  let hasFolder = 1;          
+  let hasFolder = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// DivRzOp
+//===----------------------------------------------------------------------===//
+
+def MathExt_DivRzOp : MathExt_FloatBinaryOp<"div_rz"> {
+  let summary = "floating point division operation with round-zero";
+  let description = [{
+    `%r = mathext.div_rz %a, %b : f32`
+  }];
+  let hasFolder = 1;
 }
 
 #endif // MATHEXT_OPS
