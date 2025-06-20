@@ -635,11 +635,15 @@ private:
     if (op->hasAttr("my_hints")) {
       auto hintAttr = dyn_cast<StringAttr>(op->getAttr("my_hints"));
       if (hintAttr && hintAttr.getValue() == "shared_memory") {
+        SmallVector<int64_t> sharedShape;
+        for (int64_t dim : tensorType.getShape()) {
+          sharedShape.push_back(ShapedType::isDynamic(dim) ? dim : dim * 4);
+        }
         // TODO: memorySpace value 8 is only for aipu backend
         auto memorySpace =
             IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
         alloc = rewriter.create<memref::AllocOp>(
-            loc, MemRefType::get(tensorType.getShape(), elemType, nullptr,
+            loc, MemRefType::get(sharedShape, elemType, nullptr,
                                  memorySpace));
       }
     }
@@ -706,15 +710,34 @@ private:
     } else {
       memref::SubViewOp srcSubview =
           getSubview(tensorType.getRank(), mixedDims, ptr, loc, rewriter);
-      memref::SubViewOp dstSubview =
-          getSubview(tensorType.getRank(), mixedDims, alloc, loc, rewriter);
-      rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
+      if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() == 8) {
+        auto reinterpretOp = ptr.getDefiningOp<memref::ReinterpretCastOp>();
+        SmallVector<OpFoldResult> offsets = reinterpretOp.getMixedOffsets();
+        SmallVector<OpFoldResult> tensorShape;
+        for (int64_t sz : tensorType.getShape()) {
+          tensorShape.push_back(rewriter.getIndexAttr(sz));
+        }
+        SmallVector<OpFoldResult> strides = reinterpretOp.getMixedStrides();
+        auto tensorSubview = rewriter.create<memref::SubViewOp>(
+            loc, alloc, offsets, tensorShape, strides);
+        auto dstSubview = rewriter.create<memref::SubViewOp>(
+            loc, alloc, offsets, mixedDims, strides);
+        rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
+        Value tensor = rewriter.create<bufferization::ToTensorOp>(
+            loc, tensorType, tensorSubview, true /* restrict */,
+            true /* writable */);
+        rewriter.replaceOp(op, tensor);
+      } else {
+        memref::SubViewOp dstSubview =
+            getSubview(tensorType.getRank(), mixedDims, alloc, loc, rewriter);
+        rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
+      }
     }
-
-    Value tensor = rewriter.create<bufferization::ToTensorOp>(
-        loc, tensorType, alloc, true /* restrict */, true /* writable */);
-    rewriter.replaceOp(op, tensor);
-
+    if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() != 8) {
+      Value tensor = rewriter.create<bufferization::ToTensorOp>(
+          loc, tensorType, alloc, true /* restrict */, true /* writable */);
+      rewriter.replaceOp(op, tensor);
+    }
     return success();
   }
 
