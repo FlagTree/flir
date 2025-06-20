@@ -2125,6 +2125,8 @@ public:
     POPULATE_BINARY_OP("__nv_pow", math::PowFOp);
     POPULATE_BINARY_OP("fmod", mathext::FModOp);
     POPULATE_BINARY_OP("powf", math::PowFOp);
+    POPULATE_BINARY_OP("div_rn", arith::DivFOp);
+    POPULATE_BINARY_OP("div_rz", mathext::DivRzOp);
 
 #undef POPULATE_BINARY_OP
     return failure();
@@ -2170,7 +2172,7 @@ public:
     POPULATE_UNARY_OP("coshf", math::CoshOp);
     POPULATE_UNARY_OP("cosh", math::CoshOp);
     POPULATE_UNARY_OP("tanhf", math::TanhOp);
-    POPULATE_UNARY_OP("tanhf", math::TanhOp);
+    POPULATE_UNARY_OP("tanh", math::TanhOp);
     POPULATE_UNARY_OP("acoshf", math::AcoshOp);
     POPULATE_UNARY_OP("acosh", math::AcoshOp);
     POPULATE_UNARY_OP("asinhf", math::AsinhOp);
