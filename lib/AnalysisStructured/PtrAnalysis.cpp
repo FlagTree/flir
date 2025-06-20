@@ -1160,7 +1160,7 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op,
     loadOp->setAttr("flagtree_hints", strAttr);
   }
 
-  if (op->hasAttr("my_hints")) {
+  if (op->getAttr("my_hints")) {
     loadOp->setAttr("my_hints", op->getAttr("my_hints"));
   }
 
