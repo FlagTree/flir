@@ -632,8 +632,8 @@ private:
 
     auto alloc = rewriter.create<memref::AllocOp>(
         loc, MemRefType::get(tensorType.getShape(), elemType));
-    if (op->hasAttr("my_hints")) {
-      auto hintAttr = dyn_cast<StringAttr>(op->getAttr("my_hints"));
+    if (op->hasAttr("flagtree_hints")) {
+      auto hintAttr = dyn_cast<StringAttr>(op->getAttr("flagtree_hints"));
       if (hintAttr && hintAttr.getValue() == "shared_memory") {
         SmallVector<int64_t> sharedShape;
         for (int64_t dim : tensorType.getShape()) {
