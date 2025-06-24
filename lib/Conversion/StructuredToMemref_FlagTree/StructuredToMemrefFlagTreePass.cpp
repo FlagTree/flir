@@ -25,7 +25,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include <optional>
 
-#define DEBUG_TYPE "structured-to-memref"
+#define DEBUG_TYPE "structured-to-memref-flagtree"
 
 using namespace mlir;
 using namespace triton;

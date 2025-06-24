@@ -4,17 +4,6 @@
 #include "triton-shared/Conversion/StructuredToMemref_FlagTree/StructuredToMemrefFlagTree.h"
 #include "triton-shared/Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/BuiltinTypeInterfaces.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/TypeUtilities.h"
-#include "mlir/IR/Types.h"
-#include "mlir/Support/LogicalResult.h"
-#include "mlir/Transforms/DialectConversion.h"
-
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -30,7 +19,7 @@
 #include <cassert>
 #include <cstdint>
 
-#define DEBUG_TYPE "structured-to-memref"
+#define DEBUG_TYPE "structured-to-memref-flagtree"
 
 using namespace mlir;
 
@@ -41,112 +30,114 @@ static const std::string WRAP_SIDE_BY_SIDE = "wrap_side_by_side";
 static const std::string WRAP_STACKED = "wrap_stacked";
 
 namespace {
-
 struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
-private:
   using OpConversionPattern<memref::CopyOp>::OpConversionPattern;
 
-  template <typename T>
-  Value getSizeValue(T op, PatternRewriter &rewriter, Location loc) const {
-    OpFoldResult ofr = op.getMixedSizes()[0];
-    if (auto attr = ofr.dyn_cast<Attribute>()) {
-      return rewriter.create<arith::ConstantIndexOp>(
-          loc, cast<IntegerAttr>(attr).getInt());
+  // Get the parameter list of Strides, Sizes and Offsets
+  SmallVector<Value> getValueList(OpBuilder &builder, Location loc,
+                                  ArrayRef<OpFoldResult> ofrs) const {
+    SmallVector<Value> values;
+    for (OpFoldResult ofr : ofrs) {
+      if (Attribute attr = ofr.dyn_cast<Attribute>()) {
+        values.push_back(builder.create<arith::ConstantIndexOp>(
+            loc, mlir::cast<IntegerAttr>(attr).getInt()));
+      } else {
+        values.push_back(ofr.dyn_cast<Value>());
+      }
     }
-    return cast<Value>(ofr);
+    return values;
   }
-  template <typename T>
-  Value getOffsetValue(T op, PatternRewriter &rewriter, Location loc) const {
-    OpFoldResult ofr = op.getMixedOffsets()[0];
-    if (auto attr = ofr.dyn_cast<Attribute>()) {
-      return rewriter.create<arith::ConstantIndexOp>(
-          loc, cast<IntegerAttr>(attr).getInt());
+
+  // Calculate the total number of DMA handling elements
+  Value getTotalElementCount(OpBuilder &builder, Location loc,
+                             ArrayRef<Value> sizes) const {
+    assert(!sizes.empty());
+    Value total = sizes.front();
+    for (size_t i = 1; i < sizes.size(); ++i) {
+      total = builder.create<arith::MulIOp>(loc, total, sizes[i]);
     }
-    return cast<Value>(ofr);
+    return total;
   }
-  template <typename T>
-  Value getStrideValue(T op, PatternRewriter &rewriter, Location loc) const {
-    OpFoldResult ofr = op.getMixedStrides()[0];
-    if (auto attr = ofr.dyn_cast<Attribute>()) {
-      return rewriter.create<arith::ConstantIndexOp>(
-          loc, cast<IntegerAttr>(attr).getInt());
+
+  // Check whether the street is 1
+  bool isAllStrideOne(ArrayRef<OpFoldResult> strides) const {
+    for (OpFoldResult ofr : strides) {
+      if (auto attr = ofr.dyn_cast<Attribute>()) {
+        auto intAttr = dyn_cast<IntegerAttr>(attr);
+        if (!intAttr || intAttr.getInt() != 1)
+          return false;
+        continue;
+      }
+
+      if (auto val = ofr.dyn_cast<Value>()) {
+        if (auto constOp = val.getDefiningOp<arith::ConstantIndexOp>())
+          if (constOp.value() == 1)
+            continue;
+
+        if (auto intOp = val.getDefiningOp<arith::ConstantIntOp>())
+          if (intOp.value() == 1)
+            continue;
+      }
+
+      return false;
     }
-    return cast<Value>(ofr);
+
+    return true;
   }
+
   LogicalResult rewriteCopyToDma(memref::CopyOp op, OpAdaptor adaptor,
                                  ConversionPatternRewriter &rewriter) const {
     Location loc = op.getLoc();
-
     Value src = adaptor.getSource();
     Value dst = adaptor.getTarget();
 
-    auto srcType = dyn_cast<MemRefType>(src.getType());
-    auto dstType = dyn_cast<MemRefType>(dst.getType());
-
-    Value srcOffset;
-    Value dstOffset;
-    Value len;
-    Value strideValue;
     Value zero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-    SmallVector<Value, 1> srcIndices;
-    SmallVector<Value, 1> dstIndices;
 
-    Operation *defOp = src.getDefiningOp();
+    SmallVector<Value> srcIndices, dstIndices;
+    Value numElements;
+    Operation *srcDef = src.getDefiningOp();
 
-    if (auto srcSubview = dyn_cast<memref::SubViewOp>(defOp)) {
-      auto dstSubview = dst.getDefiningOp<memref::SubViewOp>();
+    if (auto srcSubview = dyn_cast_or_null<memref::SubViewOp>(srcDef)) {
+      auto dstSubview = dyn_cast<memref::SubViewOp>(dst.getDefiningOp());
 
-      srcOffset = getOffsetValue(srcSubview, rewriter, loc);
-      dstOffset = getOffsetValue(dstSubview, rewriter, loc);
-      srcIndices = {srcOffset};
-      dstIndices = {dstOffset};
-      len = getSizeValue(srcSubview, rewriter, loc);
-      strideValue = getStrideValue(srcSubview, rewriter, loc);
+      srcIndices = getValueList(rewriter, loc, srcSubview.getMixedOffsets());
+      dstIndices = getValueList(rewriter, loc, dstSubview.getMixedOffsets());
+      auto sizes = getValueList(rewriter, loc, srcSubview.getMixedSizes());
+      numElements = getTotalElementCount(rewriter, loc, sizes);
+    } else if (auto castOp = dyn_cast<memref::ReinterpretCastOp>(srcDef)) {
+      int64_t rank = mlir::cast<MemRefType>(src.getType()).getRank();
 
-    } else if (auto castOp = dyn_cast<memref::ReinterpretCastOp>(defOp)) {
-      srcIndices = dstIndices = ValueRange{zero};
-      len = getSizeValue(castOp, rewriter, loc);
-      strideValue = getStrideValue(castOp, rewriter, loc);
+      srcIndices.assign(rank, zero);
+      dstIndices.assign(rank, zero);
+      auto sizes = getValueList(rewriter, loc, castOp.getMixedSizes());
+      numElements = getTotalElementCount(rewriter, loc, sizes);
+    } else {
+      return failure();
     }
 
-    Type i32Type = IntegerType::get(rewriter.getContext(), 32);
-    Attribute memorySpace = IntegerAttr::get(i32Type, 11);
-    MemRefType tagType = MemRefType::get({1}, i32Type, nullptr, memorySpace);
+    Type i32Type = rewriter.getIntegerType(32);
+    Attribute memSpace = IntegerAttr::get(i32Type, 11);
+
+    MemRefType tagType = MemRefType::get({1}, i32Type, nullptr, memSpace);
     Value tag = rewriter.create<memref::AllocOp>(loc, tagType);
+    SmallVector<Value> tagIndices = {zero};
 
     rewriter.create<memref::DmaStartOp>(loc, src, srcIndices, dst, dstIndices,
-                                        len, tag, ValueRange{zero});
+                                        numElements, tag, tagIndices);
 
-    rewriter.create<memref::DmaWaitOp>(loc, tag, ValueRange{zero}, len);
+    rewriter.create<memref::DmaWaitOp>(loc, tag, tagIndices, numElements);
 
     rewriter.eraseOp(op);
-
     return success();
-  }
-
-public:
-  CopyConverter(const TypeConverter &typeConverter, MLIRContext *context)
-      : OpConversionPattern<memref::CopyOp>(typeConverter, context) {}
-
-  // Check whether the street is 1
-  template <typename T> bool isConstantOne(T op) const {
-    OpFoldResult ofr = op.getMixedStrides()[0];
-    if (auto attr = ofr.dyn_cast<Attribute>()) {
-      return cast<IntegerAttr>(attr).getInt() == 1;
-    }
-    if (auto val = ofr.dyn_cast<Value>()) {
-      if (auto constOp = val.getDefiningOp<arith::ConstantIndexOp>())
-        return constOp.value() == 1;
-      if (auto intConst = val.getDefiningOp<arith::ConstantIntOp>())
-        return intConst.value() == 1;
-    }
-
-    return false;
   }
 
   LogicalResult
   matchAndRewrite(memref::CopyOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
+
+    // StructuredToMemrefPass will generate the memref.copy operation, which
+    // can be selectively converted to DMA operation later
+
     // TODO: move to UH_FlagTree
     const char *env = std::getenv("FLAGTREE_BACKEND");
     std::string dma_mode =
@@ -158,16 +149,15 @@ public:
     // Skip street is not 1
     bool isStrideOne = false;
     Value src = adaptor.getSource();
-    Operation *defOp = src.getDefiningOp();
-    if (auto srcSubview = dyn_cast<memref::SubViewOp>(defOp)) {
-      isStrideOne = isConstantOne(srcSubview);
-    } else if (auto castOp = dyn_cast<memref::ReinterpretCastOp>(defOp)) {
-      isStrideOne = isConstantOne(castOp);
+    Operation *srcDef = src.getDefiningOp();
+    if (auto srcSubview = dyn_cast_or_null<memref::SubViewOp>(srcDef)) {
+      isStrideOne = isAllStrideOne(srcSubview.getMixedStrides());
+    } else if (auto castOp = dyn_cast<memref::ReinterpretCastOp>(srcDef)) {
+      isStrideOne = isAllStrideOne(castOp.getMixedStrides());
     }
 
-    auto dmaStringAttr = dyn_cast<StringAttr>(op->getAttr("dma_hint"));
-
-    if (dmaStringAttr.getValue() == "true" && isStrideOne) {
+    auto hint = dyn_cast_or_null<StringAttr>(op->getAttr("dma_hint"));
+    if (hint && hint.getValue() == "true" && isStrideOne) {
       return rewriteCopyToDma(op, adaptor, rewriter);
     }
 
