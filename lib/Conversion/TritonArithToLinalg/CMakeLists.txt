@@ -11,6 +11,7 @@ add_triton_library(TritonArithToLinalg
   MLIRDialectUtils
   MLIRIR
   MLIRMathDialect
+  MLIRMathExtDialect
   MLIRPass
   MLIRTensorDialect
   MLIRTransforms

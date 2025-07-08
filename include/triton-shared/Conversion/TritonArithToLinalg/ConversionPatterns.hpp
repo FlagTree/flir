@@ -12,6 +12,7 @@
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/PtrAnalysis.h"
 #include "triton-shared/Dialect/TritonTilingExt/IR/TritonTilingExtDialect.h"
+#include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Utils/Utils.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"
@@ -2135,6 +2136,10 @@ public:
     POPULATE_BINARY_OP("__nv_atan2", math::Atan2Op);
     POPULATE_BINARY_OP("__nv_powf", math::PowFOp);
     POPULATE_BINARY_OP("__nv_pow", math::PowFOp);
+    POPULATE_BINARY_OP("fmod", mathext::FModOp);
+    POPULATE_BINARY_OP("powf", math::PowFOp);
+    POPULATE_BINARY_OP("div_rn", arith::DivFOp);
+    POPULATE_BINARY_OP("div_rz", mathext::DivRzOp);
 
 #undef POPULATE_BINARY_OP
     return failure();
@@ -2157,6 +2162,58 @@ public:
     rewriter.replaceOpWithNewOp<DST_OP>(op, op.getSrcs()[0]);                  \
     return success();                                                          \
   }
+
+    POPULATE_UNARY_OP("isnan", math::IsNaNOp);
+    POPULATE_UNARY_OP("isinf", math::IsInfOp);
+    POPULATE_UNARY_OP("isfinite", math::IsFiniteOp);
+    POPULATE_UNARY_OP("fabsf", math::AbsFOp);
+    POPULATE_UNARY_OP("fabs", math::AbsFOp);
+    POPULATE_UNARY_OP("sinf", math::SinOp);
+    POPULATE_UNARY_OP("sin", math::SinOp);
+    POPULATE_UNARY_OP("cosf", math::CosOp);
+    POPULATE_UNARY_OP("cos", math::CosOp);
+    POPULATE_UNARY_OP("tanf", math::TanOp);
+    POPULATE_UNARY_OP("tan", math::TanOp);
+    POPULATE_UNARY_OP("asinf", math::AsinOp);
+    POPULATE_UNARY_OP("asin", math::AsinOp);
+    POPULATE_UNARY_OP("acosf", math::AcosOp);
+    POPULATE_UNARY_OP("acos", math::AcosOp);
+    POPULATE_UNARY_OP("atanf", math::AtanOp);
+    POPULATE_UNARY_OP("atan", math::AtanOp);
+    POPULATE_UNARY_OP("sinhf", math::SinhOp);
+    POPULATE_UNARY_OP("sinh", math::SinhOp);
+    POPULATE_UNARY_OP("coshf", math::CoshOp);
+    POPULATE_UNARY_OP("cosh", math::CoshOp);
+    POPULATE_UNARY_OP("tanhf", math::TanhOp);
+    POPULATE_UNARY_OP("tanh", math::TanhOp);
+    POPULATE_UNARY_OP("acoshf", math::AcoshOp);
+    POPULATE_UNARY_OP("acosh", math::AcoshOp);
+    POPULATE_UNARY_OP("asinhf", math::AsinhOp);
+    POPULATE_UNARY_OP("asinh", math::AsinhOp);
+    POPULATE_UNARY_OP("atanhf", math::AtanhOp);
+    POPULATE_UNARY_OP("atanhf", math::AtanhOp);
+    POPULATE_UNARY_OP("logf", math::LogOp);
+    POPULATE_UNARY_OP("log", math::LogOp);
+    POPULATE_UNARY_OP("log10f", math::Log10Op);
+    POPULATE_UNARY_OP("log10", math::Log10Op);
+    POPULATE_UNARY_OP("log1pf", math::Log1pOp);
+    POPULATE_UNARY_OP("log1p", math::Log1pOp);
+    POPULATE_UNARY_OP("expf", math::ExpOp);
+    POPULATE_UNARY_OP("exp", math::ExpOp);
+    POPULATE_UNARY_OP("exp2f", math::Exp2Op);
+    POPULATE_UNARY_OP("exp2", math::Exp2Op);
+    POPULATE_UNARY_OP("erff", math::ErfOp);
+    POPULATE_UNARY_OP("erf", math::ErfOp);
+    POPULATE_UNARY_OP("sqrtf", math::SqrtOp);
+    POPULATE_UNARY_OP("sqrt", math::SqrtOp);
+    POPULATE_UNARY_OP("rsqrtf", math::RsqrtOp);
+    POPULATE_UNARY_OP("rsqrt", math::RsqrtOp);
+    POPULATE_UNARY_OP("ceilf", math::CeilOp);
+    POPULATE_UNARY_OP("ceil", math::CeilOp);
+    POPULATE_UNARY_OP("floorf", math::FloorOp);
+    POPULATE_UNARY_OP("floor", math::FloorOp);
+    POPULATE_UNARY_OP("truncf", math::TruncOp);
+    POPULATE_UNARY_OP("trunc", math::TruncOp);
 
     POPULATE_UNARY_OP("__nv_fabsf", math::AbsFOp);
     POPULATE_UNARY_OP("__nv_fabs", math::AbsFOp);

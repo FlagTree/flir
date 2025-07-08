@@ -18,6 +18,7 @@ add_triton_library(TritonToLinalgExperimental
   MLIRDialectUtils
   MLIRIR
   MLIRMathDialect
+  MLIRMathExtDialect
   MLIRPass
   MLIRTensorDialect
   MLIRTransforms
