@@ -1,3 +1,5 @@
+#include "flagtree/Common/UnifiedHardware.h"
+
 #include "triton/Dialect/Triton/IR/Types.h"
 
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
@@ -82,6 +84,11 @@ struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
 
   LogicalResult rewriteCopyToDma(memref::CopyOp op, OpAdaptor adaptor,
                                  ConversionPatternRewriter &rewriter) const {
+    
+    auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
+    auto dmaTag = hardwareManager -> getDMATag();
+    if (!dmaTag) return failure();
+    
     Location loc = op.getLoc();
     Value src = adaptor.getSource();
     Value dst = adaptor.getTarget();
@@ -134,9 +141,8 @@ struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
       return failure();
     }
 
-    // TODO: move to UH_FlagTree
     Type i32Type = rewriter.getIntegerType(32);
-    Attribute tagMemSpace = IntegerAttr::get(i32Type, 11);
+    Attribute tagMemSpace = IntegerAttr::get(i32Type, dmaTag);
 
     MemRefType tagType = MemRefType::get({1}, i32Type, nullptr, tagMemSpace);
     Value tag = rewriter.create<memref::AllocOp>(loc, tagType);

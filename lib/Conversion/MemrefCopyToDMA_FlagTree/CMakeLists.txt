@@ -4,6 +4,8 @@ add_triton_library(MemrefCopyToDMAFlagTree
 
   DEPENDS
   MemrefCopyToDMAFlagTreeConversionPassIncGen
+  Registrar
+  Common
 
   LINK_LIBS PUBLIC
   MLIRSCFTransforms
