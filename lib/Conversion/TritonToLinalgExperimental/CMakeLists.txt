@@ -31,6 +31,7 @@ add_triton_library(TritonToLinalgExperimental
 
   TritonArithToLinalg
   StructuredToMemref
+  MemrefCopyToDMAFlagTree
   TritonToStructured
   TritonToUnstructured
   TritonPtrToMemref
