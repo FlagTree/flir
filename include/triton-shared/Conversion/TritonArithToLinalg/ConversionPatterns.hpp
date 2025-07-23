@@ -1192,9 +1192,10 @@ private:
 
   bool isReductionOpSupported(Operation *redOp) const {
     return isa<arith::AddFOp, arith::AddIOp, arith::AndIOp, arith::MaximumFOp,
-               arith::MulFOp, arith::MulIOp, arith::MaxNumFOp, arith::MinimumFOp,
-               arith::MinNumFOp, arith::MinSIOp, arith::MinUIOp, arith::MaxSIOp,
-               arith::MaxUIOp, arith::OrIOp, arith::XOrIOp>(
+           arith::MulFOp, arith::MulIOp, arith::MaxNumFOp, arith::MinimumFOp,
+           arith::MinNumFOp, arith::MinSIOp, arith::MinUIOp, arith::MaxSIOp,
+           arith::MaxUIOp, arith::OrIOp, arith::XOrIOp, arith::DivFOp,
+           arith::SubFOp>(
         redOp);
   }
 
@@ -1243,6 +1244,12 @@ private:
             .Case([&](arith::OrIOp) {
               return rewriter.getIntegerAttr(constantType, 0);
             })
+            .Case([&](arith::DivFOp) {
+              return rewriter.getFloatAttr(constantType, 1.f);
+            })
+            .Case([&](arith::SubFOp) {
+              return rewriter.getFloatAttr(constantType, 0.f);
+            })
             .Default([](Operation *op) {
               op->dump();
               llvm_unreachable("Reduction op not yet supported");
@@ -1258,14 +1265,14 @@ private:
 	cast<FloatType>(Float32Type::get(elemType.getContext())).getWidth();
     return isa<FloatType>(elemType) &&
            elemType.getIntOrFloatBitWidth() < width &&
-           isa<arith::AddFOp>(redOp);
+          (isa<arith::AddFOp>(redOp) || isa<arith::SubFOp>(redOp) || isa<arith::DivFOp>(redOp));
   }
 
   Value getRedElement(Value lhs, Value rhs, const Location loc,
                       Operation *redOp, OpBuilder &b,
                       const bool convertLhsToF32Precision) const {
     return llvm::TypeSwitch<Operation *, Value>(redOp)
-        .Case<arith::AddFOp, arith::MulFOp>([&](auto redOp) {
+        .Case<arith::AddFOp, arith::MulFOp, arith::DivFOp, arith::SubFOp>([&](auto redOp) {
           if (convertLhsToF32Precision) {
             lhs = b.create<arith::ExtFOp>(loc, Float32Type::get(b.getContext()),
                                           lhs);
