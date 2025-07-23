@@ -1192,10 +1192,10 @@ private:
 
   bool isReductionOpSupported(Operation *redOp) const {
     return isa<arith::AddFOp, arith::AddIOp, arith::AndIOp, arith::MaximumFOp,
-           arith::MulFOp, arith::MulIOp, arith::MaxNumFOp, arith::MinimumFOp,
-           arith::MinNumFOp, arith::MinSIOp, arith::MinUIOp, arith::MaxSIOp,
-           arith::MaxUIOp, arith::OrIOp, arith::XOrIOp, arith::DivFOp,
-           arith::SubFOp>(
+               arith::MulFOp, arith::MulIOp, arith::MaxNumFOp, arith::MinimumFOp,
+               arith::MinNumFOp, arith::MinSIOp, arith::MinUIOp, arith::MaxSIOp,
+               arith::MaxUIOp, arith::OrIOp, arith::XOrIOp, arith::DivFOp,
+               arith::SubFOp>(
         redOp);
   }
 
