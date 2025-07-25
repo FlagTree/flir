@@ -563,6 +563,40 @@ private:
     return {sv1, sv2};
   }
 
+  // Create a corresponding subview for each TEC and
+  // specify the space it occupies in the shared memory
+  memref::SubViewOp createTensorSubview(tts::LoadOp op, Value ptr,
+                                  Value alloc,
+                                  ConversionPatternRewriter &rewriter) const {
+    auto loc = op->getLoc();
+    auto reinterpretOp = ptr.getDefiningOp<memref::ReinterpretCastOp>();
+    auto tensorType = cast<RankedTensorType>(op.getType());
+    SmallVector<OpFoldResult> offsets = reinterpretOp.getMixedOffsets();
+    SmallVector<OpFoldResult> tensorShape, modShape;
+    for (int64_t dim : tensorType.getShape()) {
+      tensorShape.push_back(rewriter.getIndexAttr(dim));
+      int64_t sharedDim = ShapedType::isDynamic(dim) ? dim : dim * 4;
+      modShape.push_back(rewriter.getIndexAttr(sharedDim));
+    }
+    SmallVector<OpFoldResult> strides(tensorType.getRank(), rewriter.getIndexAttr(1));
+    auto func = op->getParentOfType<FunctionOpInterface>();
+    unsigned totalArgs = func.getNumArguments();
+    // offsets = (pid % TEC_Number) * block_size
+    // offstes represents the corresponding initial offset value
+    // of each TEC in the shared memory
+    Value pid = func.getArgument(totalArgs - 3);
+    Value pidIndex = rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), pid);
+    Value c4 = rewriter.create<arith::ConstantIndexOp>(loc, 4);
+    Value mod = rewriter.create<arith::RemUIOp>(loc, pidIndex, c4);
+    SmallVector<OpFoldResult> modOffsets(tensorType.getRank(), rewriter.getIndexAttr(0));
+    Value cShape = rewriter.create<arith::ConstantIndexOp>(loc, tensorType.getShape()[0]);
+    Value modOffsetsVal = rewriter.create<arith::MulIOp>(loc, mod, cShape);
+    modOffsets[0] = modOffsetsVal;
+
+    return rewriter.create<memref::SubViewOp>(
+        loc, alloc, modOffsets, tensorShape, strides);
+  }
+
   LogicalResult
   rewriteStructuredLoad(tts::LoadOp op, OpAdaptor adaptor,
                         ConversionPatternRewriter &rewriter) const {
@@ -580,11 +614,16 @@ private:
     if (op->hasAttr("flagtree_hints")) {
       auto hintAttr = dyn_cast<StringAttr>(op->getAttr("flagtree_hints"));
       if (hintAttr && hintAttr.getValue() == "shared_memory") {
+        // The size of the allocated shared memory is TEC_NUM times
+        SmallVector<int64_t> sharedShape(tensorType.getShape().begin(),
+                                 tensorType.getShape().end());
+        if (!ShapedType::isDynamic(sharedShape[0]))
+          sharedShape[0] *= 4;
         // TODO: tagMemSpace value 8 is only for aipu backend
         auto tagMemSpace =
             IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
         alloc = rewriter.create<memref::AllocOp>(
-            loc, MemRefType::get(tensorType.getShape(), elemType, nullptr,
+            loc, MemRefType::get(sharedShape, elemType, nullptr,
                                  tagMemSpace));
       }
     }
@@ -610,12 +649,26 @@ private:
         llvm_unreachable("unexpected wraparound type");
       }
     } else {
-      rewriter.create<memref::CopyOp>(loc, ptr, alloc);
+      if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() == 8) {
+        // tensorSubview represents moving data to the space of the corresponding
+        // TEC in shared memory and converting it into tensor form
+        SmallVector<OpFoldResult> strides(tensorType.getRank(), rewriter.getIndexAttr(1));
+        auto tensorSubview = createTensorSubview(op, ptr, alloc, rewriter);
+        rewriter.create<memref::CopyOp>(loc, ptr, tensorSubview);
+        Value tensor = rewriter.create<bufferization::ToTensorOp>(
+            loc, tensorType, tensorSubview, true /* restrict */,
+            true /* writable */);
+        rewriter.replaceOp(op, tensor);
+      } else {
+        rewriter.create<memref::CopyOp>(loc, ptr, alloc);
+      }
     }
 
-    Value tensor = rewriter.create<bufferization::ToTensorOp>(
-        loc, tensorType, alloc, true /* restrict */, true /* writable */);
-    rewriter.replaceOp(op, tensor);
+    if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() != 8) {
+      Value tensor = rewriter.create<bufferization::ToTensorOp>(
+          loc, tensorType, alloc, true /* restrict */, true /* writable */);
+      rewriter.replaceOp(op, tensor);
+    }
 
     return success();
   }
@@ -635,10 +688,11 @@ private:
     if (op->hasAttr("flagtree_hints")) {
       auto hintAttr = dyn_cast<StringAttr>(op->getAttr("flagtree_hints"));
       if (hintAttr && hintAttr.getValue() == "shared_memory") {
-        SmallVector<int64_t> sharedShape;
-        for (int64_t dim : tensorType.getShape()) {
-          sharedShape.push_back(ShapedType::isDynamic(dim) ? dim : dim * 4);
-        }
+        // The size of the allocated shared memory is TEC_NUM times
+        SmallVector<int64_t> sharedShape(tensorType.getShape().begin(),
+                                 tensorType.getShape().end());
+        if (!ShapedType::isDynamic(sharedShape[0]))
+          sharedShape[0] *= 4;
         // TODO: tagMemSpace value 8 is only for aipu backend
         auto tagMemSpace =
             IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
@@ -675,9 +729,17 @@ private:
 
       // condition the memset on the or-accumulation
       // initialize with padding prior to CopyOp
+      Value fillMem;
+      // When shared memory is used, only the space occupied
+      // by the corresponding TEC is filled
+      if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() == 8) {
+        fillMem = createTensorSubview(op, ptr, alloc, rewriter).getResult();
+      } else {
+        fillMem = alloc;
+      }
       rewriter.create<scf::IfOp>(loc, accBase, [&](OpBuilder &b, Location loc) {
         b.create<linalg::FillOp>(loc, ValueRange{op.getOther()},
-                                 ValueRange{alloc});
+                                 ValueRange{fillMem});
         b.create<scf::YieldOp>(loc);
       });
     }
@@ -711,34 +773,18 @@ private:
       memref::SubViewOp srcSubview =
           getSubview(tensorType.getRank(), mixedDims, ptr, loc, rewriter);
       if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() == 8) {
-        auto reinterpretOp = ptr.getDefiningOp<memref::ReinterpretCastOp>();
-        SmallVector<OpFoldResult> offsets = reinterpretOp.getMixedOffsets();
-        SmallVector<OpFoldResult> tensorShape, modShape;
-        for (int64_t dim : tensorType.getShape()) {
-          tensorShape.push_back(rewriter.getIndexAttr(dim));
-          int64_t sharedDim = ShapedType::isDynamic(dim) ? dim : dim * 4;
-          modShape.push_back(rewriter.getIndexAttr(sharedDim));
-        }
-        SmallVector<OpFoldResult> strides = reinterpretOp.getMixedStrides();
-
-        auto func = op->getParentOfType<FunctionOpInterface>();
-        if (!func) return failure();
-        unsigned totalArgs = func.getNumArguments();
-        Value pid = func.getArgument(totalArgs - 3);
-        Value pidIndex = rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), pid);
-        Value c4 = rewriter.create<arith::ConstantIndexOp>(loc, 4);
-        Value mod = rewriter.create<arith::RemUIOp>(loc, pidIndex, c4);
-        SmallVector<OpFoldResult> modOffsets;
-        for (int64_t dim : tensorType.getShape()) {
-         Value cShape = rewriter.create<arith::ConstantIndexOp>(loc, dim);
-         Value modOffsetsVal = rewriter.create<arith::MulIOp>(loc, mod, cShape);
-         modOffsets.push_back(modOffsetsVal);
-        }
-
-        auto tensorSubview = rewriter.create<memref::SubViewOp>(
-            loc, alloc, modOffsets, tensorShape, strides);
-        auto dstSubview = rewriter.create<memref::SubViewOp>(
-            loc, alloc, modOffsets, mixedDims, strides);
+        // The tensorSubview passes bufferization.to_tensor to
+        // convert memref into tensor form for subsequent computations
+        SmallVector<OpFoldResult> strides(tensorType.getRank(), rewriter.getIndexAttr(1));
+        auto tensorSubview = createTensorSubview(op, ptr, alloc, rewriter);
+        // dstSubview represents moving to the
+        // specified TEC space of shared memory
+        auto modOffsets = tensorSubview.getMixedOffsets();
+        auto allocType = cast<MemRefType>(alloc.getType());
+        auto dstType =
+            memref::SubViewOp::inferResultType(allocType, modOffsets, mixedDims, strides);
+        auto dstSubview = rewriter.create<memref::SubViewOp>(loc, cast<MemRefType>(dstType), alloc,
+            modOffsets, mixedDims, strides);
         rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
         Value tensor = rewriter.create<bufferization::ToTensorOp>(
             loc, tensorType, tensorSubview, true /* restrict */,
