@@ -328,10 +328,11 @@ LogicalResult MaskState::parseAnd(arith::AndIOp andOp, const Location loc,
   if (failed(rhsState.parse(andOp.getRhs(), loc, builder)))
     return failure();
 
-  if(!start && !end && (lhsState.dims.size() > 0 || rhsState.dims.size() > 0)) {
-    return this->minStates(lhsState, rhsState, loc, builder);
+  // TODO(FLIR): should be isMask()
+  if(!lhsState.isMaskWithoutScalar() || !rhsState.isMaskWithoutScalar()) {
+    return this->minStateScalar(lhsState, rhsState, loc, builder);
   }
-  return this->minStateScalar(lhsState, rhsState, loc, builder);
+  return this->minStates(lhsState, rhsState, loc, builder);
 }
 
 LogicalResult MaskState::parseExtSI(arith::ExtSIOp op, const Location loc,
