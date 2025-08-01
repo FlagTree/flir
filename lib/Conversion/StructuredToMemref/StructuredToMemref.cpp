@@ -571,6 +571,7 @@ private:
     auto loc = op->getLoc();
     auto reinterpretOp = ptr.getDefiningOp<memref::ReinterpretCastOp>();
     auto tensorType = cast<RankedTensorType>(op.getType());
+    auto shape = tensorType.getShape();
     SmallVector<OpFoldResult> offsets = reinterpretOp.getMixedOffsets();
     SmallVector<OpFoldResult> tensorShape, modShape;
     for (int64_t dim : tensorType.getShape()) {
@@ -596,6 +597,17 @@ private:
         rewriter.create<arith::ConstantIndexOp>(loc, tensorType.getShape()[0]);
     Value modOffsetsVal = rewriter.create<arith::MulIOp>(loc, mod, cShape);
     modOffsets[0] = modOffsetsVal;
+
+    if (shape.size() == 2) {
+      Value pidY = func.getArgument(totalArgs - 2);
+      Value pidIndexY =
+        rewriter.create<arith::IndexCastOp>(loc, rewriter.getIndexType(), pidY);
+      Value modY =  rewriter.create<arith::RemUIOp>(loc, pidIndexY, c4);
+      Value cShapeY =
+        rewriter.create<arith::ConstantIndexOp>(loc, tensorType.getShape()[1]);
+      Value modOffsetsValY = rewriter.create<arith::MulIOp>(loc, modY, cShapeY);
+      modOffsets[1] = modOffsetsValY;
+    }
 
     return rewriter.create<memref::SubViewOp>(loc, alloc, modOffsets,
                                               tensorShape, strides);
@@ -695,8 +707,11 @@ private:
         // The size of the allocated shared memory is TEC_NUM times
         SmallVector<int64_t> sharedShape(tensorType.getShape().begin(),
                                          tensorType.getShape().end());
-        if (!ShapedType::isDynamic(sharedShape[0]))
+        if (!ShapedType::isDynamic(sharedShape[0])){
           sharedShape[0] *= 4;
+        }
+        if (sharedShape.size() == 2)
+          sharedShape[1] *= 4;
         // TODO: tagMemSpace value 8 is only for aipu backend
         auto tagMemSpace =
             IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
