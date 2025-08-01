@@ -60,6 +60,8 @@ struct MaskState {
   bool isEmpty() const { return getRank() == 0 && !scalar && !start && !end; }
 
   bool isMask() const { return !start && !end && !scalar && dims.size() != 0; }
+  // TODO(FLIR): should be isMask()
+  bool isMaskWithoutScalar() const { return !start && !end && dims.size() != 0; }
 
   // Recursively parse a Value; call the coresponding function based on the
   // defining operation and Value type
