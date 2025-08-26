@@ -1194,7 +1194,9 @@ private:
     return isa<arith::AddFOp, arith::AddIOp, arith::AndIOp, arith::MaximumFOp,
                arith::MulFOp, arith::MulIOp, arith::MaxNumFOp, arith::MinimumFOp,
                arith::MinNumFOp, arith::MinSIOp, arith::MinUIOp, arith::MaxSIOp,
-               arith::MaxUIOp, arith::OrIOp, arith::XOrIOp>(
+               arith::MaxUIOp, arith::OrIOp, arith::XOrIOp,
+               arith::SubFOp, arith::DivFOp
+               >(
         redOp);
   }
 
@@ -1243,6 +1245,12 @@ private:
             .Case([&](arith::OrIOp) {
               return rewriter.getIntegerAttr(constantType, 0);
             })
+            .Case([&](arith::DivFOp) {
+              return rewriter.getFloatAttr(constantType, 1.f);
+            })
+            .Case([&](arith::SubFOp) {
+              return rewriter.getFloatAttr(constantType, 0.f);
+            })
             .Default([](Operation *op) {
               op->dump();
               llvm_unreachable("Reduction op not yet supported");
@@ -1258,14 +1266,14 @@ private:
 	cast<FloatType>(Float32Type::get(elemType.getContext())).getWidth();
     return isa<FloatType>(elemType) &&
            elemType.getIntOrFloatBitWidth() < width &&
-           isa<arith::AddFOp>(redOp);
+           isa<arith::AddFOp, arith::SubFOp, arith::DivFOp>(redOp);
   }
 
   Value getRedElement(Value lhs, Value rhs, const Location loc,
                       Operation *redOp, OpBuilder &b,
                       const bool convertLhsToF32Precision) const {
     return llvm::TypeSwitch<Operation *, Value>(redOp)
-        .Case<arith::AddFOp, arith::MulFOp>([&](auto redOp) {
+        .Case<arith::AddFOp, arith::MulFOp, arith::DivFOp, arith::SubFOp>([&](auto redOp) {
           if (convertLhsToF32Precision) {
             lhs = b.create<arith::ExtFOp>(loc, Float32Type::get(b.getContext()),
                                           lhs);
@@ -2138,6 +2146,7 @@ public:
     POPULATE_BINARY_OP("powf", math::PowFOp);
     POPULATE_BINARY_OP("div_rn", arith::DivFOp);
     POPULATE_BINARY_OP("div_rz", mathext::DivRzOp);
+    POPULATE_BINARY_OP("atan2", math::Atan2Op);
 
 #undef POPULATE_BINARY_OP
     return failure();
