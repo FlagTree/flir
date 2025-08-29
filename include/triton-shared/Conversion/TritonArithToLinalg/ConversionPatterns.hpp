@@ -1446,12 +1446,26 @@ class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
                                 ValueRange{initTensor})
         .result();
   }
+
+  LogicalResult checkConstFloat(Value value, float val) const {
+    if (auto constOp = dyn_cast<arith::ConstantOp>(value.getDefiningOp())) {
+      if (auto floatAttr = dyn_cast<FloatAttr>(constOp.getValue())) {
+        if (floatAttr.getValueAsDouble() == val) {
+          return success();
+        }
+      }
+    }
+    return failure();
+  }
+
   LogicalResult matchVarMeanBody(Value mean_x, Value count_x, Value M_x,
                                  Value mean_y, Value count_y, Value M_y,
-                                 mlir::Block::iterator &it) const {
+                                 mlir::Block::iterator &it,
+                                 Operation *block_teminator) const {
 
     //  %33 = arith.addf %arg7, %arg10 : f32    // count = count_x + count_y
     //  %34 = arith.maxnumf %33, %cst : f32     // _count = tl.maximum(count, 1)
+
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
     auto addOp0 = dyn_cast<arith::AddFOp>(*it++);
     if (addOp0) {
@@ -1461,34 +1475,23 @@ class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
     } else {
       return failure();
     }
+
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
     auto maxOp0 = dyn_cast<arith::MaxNumFOp>(*it++);
     if (maxOp0) {
       if (maxOp0.getLhs() != addOp0) {
         return failure();
       }
-      auto constOp =
-          dyn_cast<arith::ConstantOp>(maxOp0.getRhs().getDefiningOp());
-      if (constOp) {
-        auto floatAttr = dyn_cast<FloatAttr>(constOp.getValue());
-        if (floatAttr) {
-          if (floatAttr.getType().isF32() &&
-              floatAttr.getValueAsDouble() == 1.0f) {
-            LLVM_DEBUG(llvm::dbgs() << "  --> Matched: MaxNumFOp.rhs=1.0f)\n");
-          } else {
-            return failure(); // not 1.0f
-          }
-        } else {
-          return failure(); // not float
-        }
-      } else {
-        return failure(); // rhs not cst
+      if (failed(checkConstFloat(maxOp0.getRhs(), 1.f))) {
+        return failure();
       }
     } else {
       return failure();
     }
+
     //  %35 = arith.mulf %arg6, %arg7 : f32    //mc_x = mean_x * count_x
     //  %36 = arith.mulf %arg9, %arg10 : f32   //mc_y = mean_y * count_y
+
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
     auto mulOp0 = dyn_cast<arith::MulFOp>(*it++);
     if (mulOp0) {
@@ -1498,6 +1501,7 @@ class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
     } else {
       return failure();
     }
+
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
     auto mulOp1 = dyn_cast<arith::MulFOp>(*it++);
     if (mulOp1) {
@@ -1507,10 +1511,12 @@ class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
     } else {
       return failure();
     }
+
     // mean = (mc_x + mc_y) / _count
     //
     //   %37 = arith.addf %35, %36 : f32    // sum_mc = mc_x + mc_y
     //   %38 = arith.divf %37, %34 : f32    // mean = sum_mc / _count
+
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
     auto addOp1 = dyn_cast<arith::AddFOp>(*it++);
     if (addOp1) {
@@ -1520,6 +1526,7 @@ class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
     } else {
       return failure();
     }
+
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
     auto divOp0 = dyn_cast<arith::DivFOp>(*it++);
     if (divOp0) {
@@ -1529,6 +1536,7 @@ class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
     } else {
       return failure();
     }
+
     // M = M_x + mc_x * mean_x + M_y + mc_y * mean_y - count * mean * mean
     //
     // %39 = arith.mulf %35, %arg6 : f32  // part_x = mc_x * mean_x
@@ -1619,10 +1627,12 @@ class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
     } else {
       return failure();
     }
+
     // tt.reduce.return %38, %33, %46 : f32, f32, f32    //return mean, count, M
+
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
     auto termOp = dyn_cast<triton::ReduceReturnOp>(*it++);
-    if (termOp) {
+    if (termOp && termOp == block_teminator) {
       auto opnds = termOp.getOperands();
       if (opnds != ArrayRef<Value>{divOp0, addOp0, subOp}) {
         return failure();
@@ -1657,7 +1667,7 @@ public:
 
     auto opsIt = ops.begin();
     if (failed(matchVarMeanBody(mean_x, count_x, M_x, mean_y, count_y, M_y,
-                                opsIt))) {
+                                opsIt, block->getTerminator()))) {
       return failure();
     }
     auto loc = op.getLoc();
