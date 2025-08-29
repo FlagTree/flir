@@ -1399,6 +1399,337 @@ public:
   }
 };
 
+class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
+  using OpConversionPattern<triton::ReduceOp>::OpConversionPattern;
+  // We're looking for an op that looks like this:
+  //
+  // %26:3 = "tt.reduce"(%25#1, %25#2, %25#0) <{axis = 1 : i32}> ({
+  //     ^bb0(%arg6: f32, %arg7: f32, %arg8: f32, %arg9: f32, %arg10: f32,
+  //     %arg11: f32):
+  //       %33 = arith.addf %arg7, %arg10 : f32
+  //       %34 = arith.maxnumf %33, %cst : f32
+  //       %35 = arith.mulf %arg6, %arg7 : f32
+  //       %36 = arith.mulf %arg9, %arg10 : f32
+  //       %37 = arith.addf %35, %36 : f32
+  //       %38 = arith.divf %37, %34 : f32
+  //       %39 = arith.mulf %35, %arg6 : f32
+  //       %40 = arith.addf %arg8, %39 : f32
+  //       %41 = arith.addf %40, %arg11 : f32
+  //       %42 = arith.mulf %36, %arg9 : f32
+  //       %43 = arith.addf %41, %42 : f32
+  //       %44 = arith.mulf %33, %38 : f32
+  //       %45 = arith.mulf %44, %38 : f32
+  //       %46 = arith.subf %43, %45 : f32
+  //       tt.reduce.return %38, %33, %46 : f32, f32, f32
+  //     }) : (tensor<8x2048xf32>, tensor<8x2048xf32>, tensor<8x2048xf32>) ->
+  //     (tensor<8xf32>, tensor<8xf32>, tensor<8xf32>)
+  //
+  // The above mlir code is lowered from this combinator in triton's
+  // standard.py:
+  //
+  // def welford_func(mean_x, count_x, M_x, mean_y, count_y, M_y):
+  //     count = count_x + count_y
+  //     _count = tl.maximum(count, 1)
+  //     mc_x = mean_x * count_x
+  //     mc_y = mean_y * count_y
+  //     mean = (mc_x + mc_y) / _count
+  //     M = M_x + mc_x * mean_x + M_y + mc_y * mean_y - count * mean * mean
+  //     return mean, count, M
+
+  Value getInitTensor(ConversionPatternRewriter &rewriter,
+                      ArrayRef<int64_t> shape, Value fillValue,
+                      Location loc) const {
+    Value initTensor =
+        rewriter.create<tensor::EmptyOp>(loc, shape, fillValue.getType());
+    return rewriter
+        .create<linalg::FillOp>(loc, ValueRange{fillValue},
+                                ValueRange{initTensor})
+        .result();
+  }
+  LogicalResult matchVarMeanBody(Value mean_x, Value count_x, Value M_x,
+                                 Value mean_y, Value count_y, Value M_y,
+                                 mlir::Block::iterator &it) const {
+
+    //  %33 = arith.addf %arg7, %arg10 : f32    // count = count_x + count_y
+    //  %34 = arith.maxnumf %33, %cst : f32     // _count = tl.maximum(count, 1)
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto addOp0 = dyn_cast<arith::AddFOp>(*it++);
+    if (addOp0) {
+      if (count_x != addOp0.getLhs() || count_y != addOp0.getRhs()) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto maxOp0 = dyn_cast<arith::MaxNumFOp>(*it++);
+    if (maxOp0) {
+      if (maxOp0.getLhs() != addOp0) {
+        return failure();
+      }
+      auto constOp =
+          dyn_cast<arith::ConstantOp>(maxOp0.getRhs().getDefiningOp());
+      if (constOp) {
+        auto floatAttr = dyn_cast<FloatAttr>(constOp.getValue());
+        if (floatAttr) {
+          if (floatAttr.getType().isF32() &&
+              floatAttr.getValueAsDouble() == 1.0f) {
+            LLVM_DEBUG(llvm::dbgs() << "  --> Matched: MaxNumFOp.rhs=1.0f)\n");
+          } else {
+            return failure(); // not 1.0f
+          }
+        } else {
+          return failure(); // not float
+        }
+      } else {
+        return failure(); // rhs not cst
+      }
+    } else {
+      return failure();
+    }
+    //  %35 = arith.mulf %arg6, %arg7 : f32    //mc_x = mean_x * count_x
+    //  %36 = arith.mulf %arg9, %arg10 : f32   //mc_y = mean_y * count_y
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto mulOp0 = dyn_cast<arith::MulFOp>(*it++);
+    if (mulOp0) {
+      if (mean_x != mulOp0.getLhs() || count_x != mulOp0.getRhs()) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto mulOp1 = dyn_cast<arith::MulFOp>(*it++);
+    if (mulOp1) {
+      if (mean_y != mulOp1.getLhs() || count_y != mulOp1.getRhs()) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+    // mean = (mc_x + mc_y) / _count
+    //
+    //   %37 = arith.addf %35, %36 : f32    // sum_mc = mc_x + mc_y
+    //   %38 = arith.divf %37, %34 : f32    // mean = sum_mc / _count
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto addOp1 = dyn_cast<arith::AddFOp>(*it++);
+    if (addOp1) {
+      if (addOp1.getLhs() != mulOp0 || addOp1.getRhs() != mulOp1) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto divOp0 = dyn_cast<arith::DivFOp>(*it++);
+    if (divOp0) {
+      if (divOp0.getLhs() != addOp1 || divOp0.getRhs() != maxOp0) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+    // M = M_x + mc_x * mean_x + M_y + mc_y * mean_y - count * mean * mean
+    //
+    // %39 = arith.mulf %35, %arg6 : f32  // part_x = mc_x * mean_x
+    // %40 = arith.addf %arg8, %39 : f32  // item_1 = M_x + part_x
+    // %41 = arith.addf %40, %arg11 : f32 // item_2 = item_1 + M_y
+    // %42 = arith.mulf %36, %arg9 : f32  // part_y = mc_y * mean_y
+    // %43 = arith.addf %41, %42 : f32    // item_3 = iterm_2 + part_y
+    // %44 = arith.mulf %33, %38 : f32    // mean_0 = count * mean
+    // %45 = arith.mulf %44, %38 : f32    // mean_1 = mean_0 * mean
+    // %46 = arith.subf %43, %45 : f32    // M =  item_3 - mean_1
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto mulOp2 = dyn_cast<arith::MulFOp>(*it++);
+    if (mulOp2) {
+      if (mulOp2.getLhs() != mulOp0 || mulOp2.getRhs() != mean_x) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto addOp2 = dyn_cast<arith::AddFOp>(*it++);
+    if (addOp2) {
+      if (addOp2.getLhs() != M_x || addOp2.getRhs() != mulOp2) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto addOp3 = dyn_cast<arith::AddFOp>(*it++);
+    if (addOp3) {
+      if (addOp3.getLhs() != addOp2 || addOp3.getRhs() != M_y) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto mulOp3 = dyn_cast<arith::MulFOp>(*it++);
+    if (mulOp3) {
+      if (mulOp3.getLhs() != mulOp1 || mulOp3.getRhs() != mean_y) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto addOp4 = dyn_cast<arith::AddFOp>(*it++);
+    if (addOp4) {
+      if (addOp4.getLhs() != addOp3 || addOp4.getRhs() != mulOp3) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto mulOp4 = dyn_cast<arith::MulFOp>(*it++);
+    if (mulOp4) {
+      if (mulOp4.getLhs() != addOp0 || mulOp4.getRhs() != divOp0) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto mulOp5 = dyn_cast<arith::MulFOp>(*it++);
+    if (mulOp5) {
+      if (mulOp5.getLhs() != mulOp4 || mulOp5.getRhs() != divOp0) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto subOp = dyn_cast<arith::SubFOp>(*it++);
+    if (subOp) {
+      if (subOp.getLhs() != addOp4 || subOp.getRhs() != mulOp5) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+    // tt.reduce.return %38, %33, %46 : f32, f32, f32    //return mean, count, M
+    LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
+    auto termOp = dyn_cast<triton::ReduceReturnOp>(*it++);
+    if (termOp) {
+      auto opnds = termOp.getOperands();
+      if (opnds != ArrayRef<Value>{divOp0, addOp0, subOp}) {
+        return failure();
+      }
+    } else {
+      return failure();
+    }
+
+    return success();
+  }
+
+public:
+  VarMeanConverter(MLIRContext *context) : OpConversionPattern(context) {}
+
+  LogicalResult
+  matchAndRewrite(ReduceOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override final {
+    // check num_args = 6 : mean_x, count_x, M_x, mean_y, count_y, M_y
+    if (op.getBody()->getNumArguments() != 6) {
+      return failure();
+    }
+
+    auto block = op.getBody();
+    auto ops = block->without_terminator();
+
+    Value mean_x = block->getArgument(0);
+    Value count_x = block->getArgument(1);
+    Value M_x = block->getArgument(2);
+    Value mean_y = block->getArgument(3);
+    Value count_y = block->getArgument(4);
+    Value M_y = block->getArgument(5);
+
+    auto opsIt = ops.begin();
+    if (failed(matchVarMeanBody(mean_x, count_x, M_x, mean_y, count_y, M_y,
+                                opsIt))) {
+      return failure();
+    }
+    auto loc = op.getLoc();
+    auto elemTypes = op.getElementTypes();
+
+    auto meanType = elemTypes[0];
+    auto countType = elemTypes[1];
+    auto MType = elemTypes[2];
+
+    Value zeroMean = rewriter.create<arith::ConstantOp>(
+        loc, meanType, rewriter.getFloatAttr(meanType, 0.f));
+    Value zeroCount = rewriter.create<arith::ConstantOp>(
+        loc, countType, rewriter.getFloatAttr(countType, 0.f));
+    Value zeroM = rewriter.create<arith::ConstantOp>(
+        loc, MType, rewriter.getFloatAttr(MType, 0.f));
+
+    auto valueResultType = dyn_cast<RankedTensorType>(op.getType(0));
+    const auto isScalarReduce = valueResultType == nullptr;
+    SmallVector<int64_t> reductionResultShape{
+        isScalarReduce ? SmallVector<int64_t>{}
+                       : SmallVector<int64_t>(valueResultType.getShape())};
+
+    auto initTensorMean =
+        getInitTensor(rewriter, reductionResultShape, zeroMean, loc);
+    auto initTensorCount =
+        getInitTensor(rewriter, reductionResultShape, zeroCount, loc);
+    auto initTensorM =
+        getInitTensor(rewriter, reductionResultShape, zeroM, loc);
+
+    SmallVector<Value> outputs = {initTensorMean, initTensorCount, initTensorM};
+
+    auto linalgOp = rewriter.create<linalg::ReduceOp>(
+        loc, adaptor.getOperands(), outputs,
+        SmallVector<int64_t>{adaptor.getAxis()},
+        [&](OpBuilder &b, Location loc, ValueRange inputs) {
+          assert(inputs.size() == 6 &&
+                 "Expected 6 inputs to varmean reduce block");
+
+          auto tritonReduceBlock = op.getBody();
+          IRMapping mapping;
+          mapping.map(tritonReduceBlock->getArguments(), inputs);
+
+          for (auto &op : tritonReduceBlock->without_terminator()) {
+            b.clone(op, mapping);
+          }
+
+          auto tritonYield = tritonReduceBlock->getTerminator();
+          auto results =
+              llvm::map_to_vector(tritonYield->getOperands(), [&](Value val) {
+                return mapping.lookup(val);
+              });
+          b.create<linalg::YieldOp>(loc, results);
+        });
+
+    if (isScalarReduce) {
+      SmallVector<Value> reduceResults{
+          rewriter.create<tensor::ExtractOp>(
+              loc, meanType, linalgOp.getResults()[0], ValueRange{}),
+          rewriter.create<tensor::ExtractOp>(
+              loc, countType, linalgOp.getResults()[1], ValueRange{}),
+          rewriter.create<tensor::ExtractOp>(
+              loc, MType, linalgOp.getResults()[2], ValueRange{}),
+      };
+      rewriter.replaceOp(op, reduceResults);
+    } else {
+      rewriter.replaceOp(op, linalgOp);
+    }
+
+    return success();
+  }
+};
+
 template <typename T>
 class ArgMinMaxBaseConverter : public OpConversionPattern<triton::ReduceOp> {
   using OpConversionPattern<triton::ReduceOp>::OpConversionPattern;
