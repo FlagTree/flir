@@ -1783,7 +1783,7 @@ class ArgMinMaxBaseConverter : public OpConversionPattern<triton::ReduceOp> {
                                     Value &tileBreakValue) const {
     // Match the following (section 1. of the above)
     //
-    //   %11 = arith.cmpf oeq, %arg9, %arg11 : f32
+    //   %11 = arith.cmpf/i oeq, %arg9, %arg11 : f32
     //   %12 = arith.cmpi slt, %arg10, %arg12 : i32
     //   %13 = arith.andi %11, %12 : i1
     //
@@ -1793,17 +1793,27 @@ class ArgMinMaxBaseConverter : public OpConversionPattern<triton::ReduceOp> {
 
     // matching: %11 = arith.cmpf oeq, %arg9, %arg11 : f32
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
-    auto eqCmpOp = dyn_cast<arith::CmpFOp>(*it++);
-    if (eqCmpOp) {
-      if (eqCmpOp.getPredicate() != arith::CmpFPredicate::OEQ) {
+    Value eqCmpOp;
+    if (auto cmpOp = dyn_cast<arith::CmpFOp>(*it)) {
+      if (cmpOp.getPredicate() != arith::CmpFPredicate::OEQ) {
         return failure();
       }
-      if (currValue != eqCmpOp.getLhs() || reduceValue != eqCmpOp.getRhs()) {
+      if (currValue != cmpOp.getLhs() || reduceValue != cmpOp.getRhs()) {
         return failure();
       }
+      eqCmpOp = cmpOp;
+    } else if (auto cmpOp = dyn_cast<arith::CmpIOp>(*it)) {
+      if (cmpOp.getPredicate() != arith::CmpIPredicate::eq) {
+        return failure();
+      }
+      if (currValue != cmpOp.getLhs() || reduceValue != cmpOp.getRhs()) {
+        return failure();
+      }
+      eqCmpOp = cmpOp;
     } else {
       return failure();
     }
+    it++;
 
     // matching: %12 = arith.cmpi slt, %arg10, %arg12 : i32
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
@@ -1949,9 +1959,16 @@ public:
     // the result value to either -inf or +inf depending on
     // whether we're dealing with argmax or argmin
     auto valueType = elemTypes[0];
-    auto valuesAccBaseVal = rewriter.create<arith::ConstantOp>(
-        loc, valueType,
-        rewriter.getFloatAttr(valueType, T::getBaseReductionValue()));
+    Value valuesAccBaseVal;
+    if (mlir::isa<FloatType>(valueType)) {
+      valuesAccBaseVal = rewriter.create<arith::ConstantOp>(
+          loc, valueType,
+          rewriter.getFloatAttr(valueType, T::getBaseReductionValue()));
+    } else {
+      valuesAccBaseVal = rewriter.create<arith::ConstantOp>(
+          loc, valueType,
+          rewriter.getIntegerAttr(valueType, T::getBaseReductionValue()));
+    }
 
     // Set the initial value of the rank-0 tensor containing the index of the
     // min or max value to -1
@@ -2014,20 +2031,27 @@ struct ArgMaxConverter : public ArgMinMaxBaseConverter<ArgMaxConverter> {
                                              Value reduceIndex,
                                              mlir::Block::iterator &it,
                                              Value &comparisonResult) {
-    // %14 = arith.cmpf ogt, %arg9, %arg11 : f32
+    // %14 = arith.cmpf/i ogt, %arg9, %arg11 : f32
     // This corresponds to section 2. of the sample snippet in
     // ArgMinMaxBaseConverter
-    auto cmpOp = dyn_cast<arith::CmpFOp>(*it++);
-    if (cmpOp) {
+    if (auto cmpOp = dyn_cast<arith::CmpFOp>(*it)) {
       if (cmpOp.getPredicate() != arith::CmpFPredicate::OGT ||
           currValue != cmpOp.getLhs() || reduceValue != cmpOp.getRhs()) {
         return failure();
       }
+      comparisonResult = cmpOp;
+    } else if (auto cmpOp = dyn_cast<arith::CmpIOp>(*it)) {
+      auto predicate = cmpOp.getPredicate();
+      if ((predicate != arith::CmpIPredicate::sgt && predicate != arith::CmpIPredicate::ugt) ||
+          currValue != cmpOp.getLhs() || reduceValue != cmpOp.getRhs()) {
+        return failure();
+      }
+      comparisonResult = cmpOp;
     } else {
       return failure();
     }
+    it++;
 
-    comparisonResult = cmpOp;
     return success();
   }
 
@@ -2044,21 +2068,29 @@ struct ArgMinConverter : public ArgMinMaxBaseConverter<ArgMinConverter> {
                                              Value reduceIndex,
                                              mlir::Block::iterator &it,
                                              Value &comparisonResult) {
-    // %14 = arith.cmpf olt, %arg9, %arg11 : f32
+    // %14 = arith.cmpf/i olt, %arg9, %arg11 : f32
     // This corresponds to section 2. of the sample snippet in
     // ArgMinMaxBaseConverter
     LLVM_DEBUG(llvm::dbgs() << "Matching: " << *it << "\n");
-    auto cmpOp = dyn_cast<arith::CmpFOp>(*it++);
-    if (cmpOp) {
+
+    if (auto cmpOp = dyn_cast<arith::CmpFOp>(*it)) {
       if (cmpOp.getPredicate() != arith::CmpFPredicate::OLT ||
           currValue != cmpOp.getLhs() || reduceValue != cmpOp.getRhs()) {
         return failure();
       }
+      comparisonResult = cmpOp;
+    } else if (auto cmpOp = dyn_cast<arith::CmpIOp>(*it)) {
+      auto predicate = cmpOp.getPredicate();
+      if ((predicate != arith::CmpIPredicate::slt && predicate != arith::CmpIPredicate::ult) ||
+          currValue != cmpOp.getLhs() || reduceValue != cmpOp.getRhs()) {
+        return failure();
+      }
+      comparisonResult = cmpOp;
     } else {
       return failure();
     }
+    it++;
 
-    comparisonResult = cmpOp;
     return success();
   }
 
