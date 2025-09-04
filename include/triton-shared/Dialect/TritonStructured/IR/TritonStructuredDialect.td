@@ -125,10 +125,10 @@ def TTS_GetStructuredStateOp : TTS_Op<"get_structured_state", [AttrSizedResultSe
   let description = "Used to pass the offsets and strides to scf.for op to simplify IR rewrites.";
 
   let arguments = (
-    ins AnyTypeOf<[TT_PtrLike, I1Tensor, I32Tensor, I64Tensor]>:$input
+    ins AnyTypeOf<[TT_PtrLike, I1Tensor, I16Tensor, I32Tensor, I64Tensor]>:$input
   );
   let results = (
-    outs AnyTypeOf<[TT_PtrLike, I1Tensor, I32Tensor, I64Tensor]>:$structured,
+    outs AnyTypeOf<[TT_PtrLike, I1Tensor, I16Tensor, I32Tensor, I64Tensor]>:$structured,
     Variadic<Index>:$offsets,
     Variadic<Index>:$strides
   );
