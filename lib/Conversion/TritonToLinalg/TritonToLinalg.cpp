@@ -84,6 +84,7 @@ void mlir::triton::populateTritonToLinalgConversionPatterns(
   patterns.add<ArgMinConverter>(patterns.getContext());
   patterns.add<ArgMaxConverter>(patterns.getContext());
   patterns.add<ReduceConverter>(patterns.getContext());
+  patterns.add<ReduceReturnConverter>(patterns.getContext());
 
   // Note: the ordering here matters!
   // MetaOpConverter has PatternBenefit == 10 which should take precedence over

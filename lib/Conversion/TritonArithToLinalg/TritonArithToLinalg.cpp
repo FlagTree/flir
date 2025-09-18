@@ -98,6 +98,7 @@ void mlir::triton::populateTritonArithToLinalgConversionPatterns(
   patterns.add<ArgMinConverter>(patterns.getContext());
   patterns.add<ArgMaxConverter>(patterns.getContext());
   patterns.add<ReduceConverter>(patterns.getContext());
+  patterns.add<ReduceReturnConverter>(patterns.getContext());
 
   // Note: the ordering here matters!
   // These patterns are added last to they will be tried last.
