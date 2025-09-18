@@ -599,7 +599,11 @@ private:
         llvm_unreachable("unexpected wraparound type");
       }
     } else {
-      rewriter.create<memref::CopyOp>(loc, ptr, alloc);
+      auto copyOp = rewriter.create<memref::CopyOp>(loc, ptr, alloc);
+      auto strAttr = op->getAttrOfType<mlir::StringAttr>("flagtree_hints");
+      if (strAttr && !strAttr.getValue().empty()) {
+        copyOp->setAttr("flagtree_hints", strAttr);
+      }
     }
 
     Value tensor = rewriter.create<bufferization::ToTensorOp>(
@@ -686,7 +690,12 @@ private:
           getSubview(tensorType.getRank(), mixedDims, ptr, loc, rewriter);
       memref::SubViewOp dstSubview =
           getSubview(tensorType.getRank(), mixedDims, alloc, loc, rewriter);
-      rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
+      auto copyOp =
+          rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
+      auto strAttr = op->getAttrOfType<mlir::StringAttr>("flagtree_hints");
+      if (strAttr && !strAttr.getValue().empty()) {
+        copyOp->setAttr("flagtree_hints", strAttr);
+      }
     }
 
     Value tensor = rewriter.create<bufferization::ToTensorOp>(
