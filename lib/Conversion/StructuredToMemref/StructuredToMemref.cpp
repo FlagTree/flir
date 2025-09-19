@@ -633,6 +633,7 @@ private:
             IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
         alloc = rewriter.create<memref::AllocOp>(
             loc, MemRefType::get(sharedShape, elemType, nullptr, tagMemSpace));
+        alloc->setAttr("flagtree_hints", hintAttr);
       }
     }
 
@@ -711,6 +712,7 @@ private:
             IntegerAttr::get(IntegerType::get(op.getContext(), 64), 8);
         alloc = rewriter.create<memref::AllocOp>(
             loc, MemRefType::get(sharedShape, elemType, nullptr, tagMemSpace));
+        alloc->setAttr("flagtree_hints", hintAttr);
       }
     }
 
