@@ -8,6 +8,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "flagtree/Common/UnifiedHardware.h"
+
 #include "triton-shared/Analysis/MaskAnalysis.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/PtrAnalysis.h"
@@ -1390,6 +1392,126 @@ private:
            currCollapseDim == collapsedShape.size();
   }
 
+  LogicalResult adoptLinalgReduce(triton::ReduceOp op,
+                                  typename triton::ReduceOp::Adaptor adaptor,
+                                  ConversionPatternRewriter &rewriter) const {
+    Location loc = op->getLoc();
+
+    // Derive types. `tt.reduce` treats reducing a 1-D tensor with a special
+    // case that returns a scalar, but we treat it as a 0-D tensor in these
+    // types.
+    auto convertedInputTensorTypes =
+        llvm::map_range(adaptor.getOperands().getTypes(),
+                        [](Type t) { return cast<TensorType>(t); });
+    assert(llvm::all_equal(llvm::map_range(
+        convertedInputTensorTypes, [](TensorType t) { return t.getShape(); })));
+    static_cast<void>(convertedInputTensorTypes);
+
+    auto originalResultTensorTypes =
+        llvm::map_range(op.getResultTypes(), [](Type t) -> TensorType {
+          if (auto tensorType = dyn_cast<TensorType>(t))
+            return tensorType;
+          return RankedTensorType::get({}, t);
+        });
+    assert(llvm::all_equal(llvm::map_range(
+        originalResultTensorTypes, [](TensorType t) { return t.getShape(); })));
+    ArrayRef<int64_t> resultShape =
+        (*originalResultTensorTypes.begin()).getShape();
+    auto convertedResultTensorTypes =
+        llvm::map_range(originalResultTensorTypes, [&](TensorType t) {
+          return RankedTensorType::get(resultShape, t.getElementType());
+        });
+
+    llvm::SmallVector<Value> initVals;
+    llvm::SmallVector<Value> inputVals;
+    // To lowering to linalg.reduce, we use the first slice of the reduction
+    // axis of input operands as the init value of init operands. And then,
+    // reduce the remaining elements of input operands.
+    // We assume that the number of input operands is same as init operands and
+    // corresponds one to one.
+    // TODO: This restriction will need to be relaxed in the future.
+
+    assert(adaptor.getOperands().size() == op.getNumResults() &&
+           "tt.reduce requires the same input number and init number");
+    for (auto [inputVal, initTy] :
+         llvm::zip(adaptor.getOperands(), convertedResultTensorTypes)) {
+      ShapedType inputTy = cast<ShapedType>(inputVal.getType());
+      ArrayRef<int64_t> inputShape = inputTy.getShape();
+
+      // If the size of reduce axis is 1, we will replace init operands by input
+      // operands, so we should resize the input operands' shape by init
+      // operands.
+      if (inputShape[op.getAxis()] <= 1) {
+        assert(inputVals.empty() &&
+               "tt.reduce requires the same shape of all input operands");
+        SmallVector<ReassociationExprs, 4> reassociationMap;
+        [[maybe_unused]] bool res = createReassociationMaps(
+            rewriter, inputShape, initTy.getShape(), reassociationMap);
+        assert(res && "attempting to collapse into an incompatible shape");
+        auto collapse = rewriter.create<tensor::CollapseShapeOp>(
+            loc, inputVal, reassociationMap);
+        initVals.push_back(collapse);
+        continue;
+      }
+
+      // 1. Slice the first elements of input operands, and use them as init
+      //    operands' init value.
+      {
+        Value slice = sliceFirst(rewriter, loc, inputVal, op.getAxis());
+        auto sliceShape = cast<ShapedType>(slice.getType()).getShape();
+
+        // Resize slice value's shape by init operand.
+        SmallVector<ReassociationExprs, 4> reassociationMap;
+        [[maybe_unused]] bool res = createReassociationMaps(
+            rewriter, sliceShape, initTy.getShape(), reassociationMap);
+        assert(res && "attempting to collapse into an incompatible shape");
+        auto collapse = rewriter.create<tensor::CollapseShapeOp>(
+            loc, slice, reassociationMap);
+        initVals.push_back(collapse);
+      }
+      // 2. Slice the remaining elements of input operands, reduce them and
+      //    init value.
+      {
+        Value slice = sliceRemaining(rewriter, loc, inputVal, op.getAxis());
+        inputVals.push_back(slice);
+      }
+    }
+
+    // If the results are scalar, we need to extract the scalar from the
+    // 0-ranked result tensor.
+    auto getFinalResults = [&](ValueRange results) -> SmallVector<Value> {
+      if (!resultShape.empty())
+        return results;
+      SmallVector<Value> extractResults;
+      for (auto [tensor, type] :
+           llvm::zip(results, convertedResultTensorTypes)) {
+        Value scalar = rewriter.create<tensor::ExtractOp>(
+            loc, type.getElementType(), tensor, /*indices=*/ValueRange{});
+        extractResults.push_back(scalar);
+      }
+      return extractResults;
+    };
+
+    // If the the size of reduce axis is 1, we just replace the init operands by
+    // input operands.
+    if (inputVals.empty()) {
+      rewriter.replaceOp(op, getFinalResults(initVals));
+      return success();
+    }
+
+    // Create a linalg.reduce on the same input and move the combine region
+    // there. (ReduceReturnOpConversion will take care of the terminator.)
+    auto reduceOp = rewriter.create<linalg::ReduceOp>(
+        loc, /*resultTypes=*/SmallVector<Type>(convertedResultTensorTypes),
+        /*inputs=*/inputVals, /*inits=*/initVals,
+        /*dimensions=*/ArrayRef<int64_t>{op.getAxis()});
+    rewriter.inlineRegionBefore(op.getCombineOp(), reduceOp.getCombiner(),
+                                reduceOp.getCombiner().end());
+
+    rewriter.replaceOp(op, getFinalResults(reduceOp.getResults()));
+    return success();
+  }
+
   LogicalResult
   convertToLinalgReduce(triton::ReduceOp op,
                         typename triton::ReduceOp::Adaptor adaptor,
@@ -1401,123 +1523,16 @@ private:
     auto loc = op.getLoc();
     auto reductionOps = getRedOps(op);
 
+    auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
+    auto reduceStrategy = hardwareManager->getReduceStrategy();
+
     if (reductionOps.size() != 1) {
-      Location loc = op->getLoc();
-
-      // Derive types. `tt.reduce` treats reducing a 1-D tensor with a special
-      // case that returns a scalar, but we treat it as a 0-D tensor in these
-      // types.
-      auto convertedInputTensorTypes =
-          llvm::map_range(adaptor.getOperands().getTypes(),
-                          [](Type t) { return cast<TensorType>(t); });
-      assert(llvm::all_equal(llvm::map_range(
-          convertedInputTensorTypes, [](TensorType t) { return t.getShape(); })));
-      static_cast<void>(convertedInputTensorTypes);
-
-      auto originalResultTensorTypes =
-          llvm::map_range(op.getResultTypes(), [](Type t) -> TensorType {
-            if (auto tensorType = dyn_cast<TensorType>(t))
-              return tensorType;
-            return RankedTensorType::get({}, t);
-          });
-      assert(llvm::all_equal(llvm::map_range(
-          originalResultTensorTypes, [](TensorType t) { return t.getShape(); })));
-      ArrayRef<int64_t> resultShape =
-          (*originalResultTensorTypes.begin()).getShape();
-      auto convertedResultTensorTypes =
-          llvm::map_range(originalResultTensorTypes, [&](TensorType t) {
-            return RankedTensorType::get(resultShape, t.getElementType());
-          });
-
-      llvm::SmallVector<Value> initVals;
-      llvm::SmallVector<Value> inputVals;
-      // To lowering to linalg.reduce, we use the first slice of the reduction
-      // axis of input operands as the init value of init operands. And then,
-      // reduce the remaining elements of input operands.
-      // We assume that the number of input operands is same as init operands and
-      // corresponds one to one.
-      // TODO: This restriction will need to be relaxed in the future.
-
-      assert(adaptor.getOperands().size() == op.getNumResults() &&
-             "tt.reduce requires the same input number and init number");
-      for (auto [inputVal, initTy] :
-           llvm::zip(adaptor.getOperands(), convertedResultTensorTypes)) {
-        ShapedType inputTy = cast<ShapedType>(inputVal.getType());
-        ArrayRef<int64_t> inputShape = inputTy.getShape();
-
-        // If the size of reduce axis is 1, we will replace init operands by input
-        // operands, so we should resize the input operands' shape by init
-        // operands.
-        if (inputShape[op.getAxis()] <= 1) {
-          assert(inputVals.empty() &&
-                 "tt.reduce requires the same shape of all input operands");
-          SmallVector<ReassociationExprs, 4> reassociationMap;
-          [[maybe_unused]] bool res = createReassociationMaps(
-              rewriter, inputShape, initTy.getShape(), reassociationMap);
-          assert(res && "attempting to collapse into an incompatible shape");
-          auto collapse = rewriter.create<tensor::CollapseShapeOp>(
-              loc, inputVal, reassociationMap);
-          initVals.push_back(collapse);
-          continue;
-        }
-
-        // 1. Slice the first elements of input operands, and use them as init
-        //    operands' init value.
-        {
-          Value slice = sliceFirst(rewriter, loc, inputVal, op.getAxis());
-          auto sliceShape = cast<ShapedType>(slice.getType()).getShape();
-
-          // Resize slice value's shape by init operand.
-          SmallVector<ReassociationExprs, 4> reassociationMap;
-          [[maybe_unused]] bool res = createReassociationMaps(
-              rewriter, sliceShape, initTy.getShape(), reassociationMap);
-          assert(res && "attempting to collapse into an incompatible shape");
-          auto collapse = rewriter.create<tensor::CollapseShapeOp>(
-              loc, slice, reassociationMap);
-          initVals.push_back(collapse);
-        }
-        // 2. Slice the remaining elements of input operands, reduce them and
-        //    init value.
-        {
-          Value slice = sliceRemaining(rewriter, loc, inputVal, op.getAxis());
-          inputVals.push_back(slice);
-        }
-      }
-
-      // If the results are scalar, we need to extract the scalar from the
-      // 0-ranked result tensor.
-      auto getFinalResults = [&](ValueRange results) -> SmallVector<Value> {
-        if (!resultShape.empty())
-          return results;
-        SmallVector<Value> extractResults;
-        for (auto [tensor, type] :
-             llvm::zip(results, convertedResultTensorTypes)) {
-          Value scalar = rewriter.create<tensor::ExtractOp>(
-              loc, type.getElementType(), tensor, /*indices=*/ValueRange{});
-          extractResults.push_back(scalar);
-        }
-        return extractResults;
-      };
-
-      // If the the size of reduce axis is 1, we just replace the init operands by
-      // input operands.
-      if (inputVals.empty()) {
-        rewriter.replaceOp(op, getFinalResults(initVals));
-        return success();
-      }
-
-      // Create a linalg.reduce on the same input and move the combine region
-      // there. (ReduceReturnOpConversion will take care of the terminator.)
-      auto reduceOp = rewriter.create<linalg::ReduceOp>(
-          loc, /*resultTypes=*/SmallVector<Type>(convertedResultTensorTypes),
-          /*inputs=*/inputVals, /*inits=*/initVals,
-          /*dimensions=*/ArrayRef<int64_t>{op.getAxis()});
-      rewriter.inlineRegionBefore(op.getCombineOp(), reduceOp.getCombiner(),
-                                  reduceOp.getCombiner().end());
-
-      rewriter.replaceOp(op, getFinalResults(reduceOp.getResults()));
-      return success();
-
+      if (reduceStrategy=="linalg_reduce") {
+        return adoptLinalgReduce(op, adaptor, rewriter);
+      } else {
+        op.emitError("Reduction with multiple ops is not supported.");
+        return failure();
+      } 
     }
 
     auto rop = reductionOps.front();
