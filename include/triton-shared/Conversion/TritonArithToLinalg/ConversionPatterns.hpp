@@ -3,6 +3,12 @@
 
 //===----------------------------------------------------------------------===//
 //
+// The code in this document is partially borrowed from the
+// open-source project "Triton-Linalg", with the address:
+// https://github.com/Cambricon/triton-linalg.
+// * The original author's Copyright (C) [2022-2025] by Cambricon.
+// * Several modifications have been made based on this.
+//
 // Copyright (c) Microsoft Corporation, Meta Platforms.
 // Licensed under the MIT license.
 //
@@ -1295,6 +1301,10 @@ private:
         });
   }
 
+  // Copyright (C) [2022-2025] by Cambricon.
+  // flagtree: Extract the first slice along a specified dimension from
+  // input tensor. This function creates a tensor slice containing only
+  // the first element along the given dimension
   static Value sliceFirst(ConversionPatternRewriter &rewriter, Location loc,
                           Value input, int64_t dim, bool reverse = false) {
     ShapedType inputType = cast<ShapedType>(input.getType());
@@ -1315,6 +1325,11 @@ private:
     return rewriter.create<tensor::ExtractSliceOp>(loc, input, offsets, sizes,
                                                    strides);
   }
+
+  // Copyright (C) [2022-2025] by Cambricon.
+  // flagtree: Extract the remaining slices (excluding first) along a specified
+  // dimension from input tensor. This function creates a tensor slice containing
+  // all elements except the first along the given dimension
   static Value sliceRemaining(ConversionPatternRewriter &rewriter, Location loc,
                               Value input, int64_t dim, bool reverse = false) {
     ShapedType inputType = cast<ShapedType>(input.getType());
@@ -1336,6 +1351,10 @@ private:
                                                    strides);
   }
 
+  // Copyright (C) [2022-2025] by Cambricon.
+  // flagtree: Create reassociation maps for tensor reshape operations
+  // between expanded and collapsed shapes. This function generates the
+  // mapping needed for tensor.collapse_shape operations
   bool createReassociationMaps(
       OpBuilder &builder, llvm::ArrayRef<int64_t> expandedShape,
       llvm::ArrayRef<int64_t> collapsedShape,
@@ -1352,13 +1371,19 @@ private:
     if (ShapedType::isDynamicShape(expandedShape) ||
         ShapedType::isDynamicShape(collapsedShape))
       return false;
-
+    // flagtree: Initialize reassociation map with size equal to
+    // collapsed dimensions
     reassociationMap.resize(collapsedShape.size());
     unsigned currExpandDim = 0, currCollapseDim = 0;
+    // flagtree: Iterate through dimensions to create mapping between
+    // expanded and collapsed shapes
     while (currExpandDim < expandedShape.size() &&
            currCollapseDim < collapsedShape.size()) {
       int64_t dstSize = collapsedShape[currCollapseDim];
       int64_t srcSize = expandedShape[currExpandDim];
+
+      // flagtree: Accumulate dimensions until we match the target
+      // collapsed dimension size
       while (srcSize < dstSize && currExpandDim < expandedShape.size()) {
         reassociationMap[currCollapseDim].push_back(
             builder.getAffineDimExpr(currExpandDim++));
@@ -1535,6 +1560,7 @@ private:
           op, "Only support lowering reduction with body "
               "containing 1 max(i/f), addf, ori, or mulf.");
 #else
+    // flagtree: Use unified hardware manager to determine reduction strategy
     auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
     auto reduceStrategy = hardwareManager->getReduceStrategy();
 
@@ -1632,6 +1658,9 @@ public:
   }
 };
 
+// flagtree: Pattern converter for Triton reduce return operations to Linalg
+// yield operations. This converter handles the terminator operation within
+// reduce combine regions
 struct ReduceReturnConverter : public OpConversionPattern<triton::ReduceReturnOp> {
   using OpConversionPattern<triton::ReduceReturnOp>::OpConversionPattern;
 
