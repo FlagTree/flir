@@ -8,9 +8,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "flagtree/Common/UnifiedHardware.h"
+
 #include "triton-shared/Analysis/MaskAnalysis.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/PtrAnalysis.h"
+#include "triton-shared/Conversion/TritonArithToLinalg/ConversionPatterns_FlagTree.hpp"
 #include "triton-shared/Dialect/TritonTilingExt/IR/TritonTilingExtDialect.h"
 #include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Utils/Utils.h"
@@ -1304,6 +1307,7 @@ private:
     auto loc = op.getLoc();
     auto reductionOps = getRedOps(op);
 
+#ifdef ORIGIN_TRITON_SHARED
     // Reduction of arbitrary operations isn't supported because using the first
     // element across the reduction dimension requires us to iterate over a
     // subview that skips over each first element.
@@ -1312,7 +1316,19 @@ private:
       return rewriter.notifyMatchFailure(
           op, "Only support lowering reduction with body "
               "containing 1 max(i/f), addf, ori, or mulf.");
+#else
+    // flagtree: Use unified hardware manager to determine reduction strategy
+    auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
+    auto reduceStrategy = hardwareManager->getReduceStrategy();
+
+    if (reductionOps.size() != 1) {
+      if (reduceStrategy=="linalg_reduce") {
+        return applyLinalgReduce(op, adaptor, rewriter);
+      } else {
+        return rewriter.notifyMatchFailure(op, "Reduction with multiple ops and unknown strategy is not supported.");
+      }
     }
+#endif
 
     auto rop = reductionOps.front();
     auto axis = op.getAxis();
@@ -1399,6 +1415,21 @@ public:
   }
 };
 
+// flagtree: Pattern converter for Triton reduce return operations to Linalg
+// yield operations. This converter handles the terminator operation within
+// reduce combine regions
+struct ReduceReturnConverter : public OpConversionPattern<triton::ReduceReturnOp> {
+  using OpConversionPattern<triton::ReduceReturnOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(triton::ReduceReturnOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<linalg::YieldOp>(op, adaptor.getOperands());
+    return success();
+  }
+};
+
+// flagtree: Pattern converter for var_mean_welford to Linalg yield operations.
 class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
   using OpConversionPattern<triton::ReduceOp>::OpConversionPattern;
   // We're looking for an op that looks like this:
