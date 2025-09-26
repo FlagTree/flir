@@ -1429,6 +1429,7 @@ struct ReduceReturnConverter : public OpConversionPattern<triton::ReduceReturnOp
   }
 };
 
+// flagtree: Pattern converter for var_mean_welford to Linalg yield operations.
 class VarMeanConverter : public OpConversionPattern<triton::ReduceOp> {
   using OpConversionPattern<triton::ReduceOp>::OpConversionPattern;
   // We're looking for an op that looks like this:
