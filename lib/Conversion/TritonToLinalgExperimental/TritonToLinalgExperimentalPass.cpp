@@ -4,6 +4,7 @@
 // Licensed under the MIT license.
 //
 //===----------------------------------------------------------------------===//
+#include "flagtree/Common/UnifiedHardware.h"
 
 #include "mlir/Dialect/Ptr/IR/PtrDialect.h"
 #include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
@@ -75,9 +76,10 @@ public:
     // leave as a TODO for now.
     pm.addPass(createStructuredToMemrefPass());
 
-    // TODO: determine whether go this pass in some way, maybe in unified
-    // haredware.
-    pm.addPass(createMemrefCopyToDMAFlagTreePass());
+    // Pass selection is controlled by unified hardware configuration.
+    auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
+    auto dmaTag = hardwareManager -> getDMATag();
+    if (dmaTag) pm.addPass(createMemrefCopyToDMAFlagTreePass());
 
     pm.addPass(createUnstructuredToMemrefPass());
     pm.addPass(createTritonPtrToMemrefPass());

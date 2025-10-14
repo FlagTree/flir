@@ -16,5 +16,5 @@ repos:
     rev: v16.0.6
     hooks:
       - id: clang-format
-        files: '^include/triton-shared/Conversion/TritonArithToLinalg/ConversionPatterns_FlagTree.hpp'
+        files: '^(include/triton-shared/Conversion/MemrefCopyToDMA_FlagTree/.*\.h|lib/Conversion/MemrefCopyToDMA_FlagTree/.*\.cpp|include/triton-shared/Conversion/TritonArithToLinalg/ConversionPatterns_FlagTree\.hpp)$'
         stages: [pre-commit, pre-push, manual]

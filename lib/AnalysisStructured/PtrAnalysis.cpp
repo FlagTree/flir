@@ -1155,6 +1155,10 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op,
   }
 
   auto loadOp = builder.create<tts::LoadOp>(loc, ptr, dims, scalarOther);
+  auto strAttr = op->getAttrOfType<mlir::StringAttr>("flagtree_hints");
+  if (strAttr && !strAttr.getValue().empty()) {
+    loadOp->setAttr("flagtree_hints", strAttr);
+  }
 
   LLVM_DEBUG({
     llvm::dbgs() << "creating tts::load:\n";

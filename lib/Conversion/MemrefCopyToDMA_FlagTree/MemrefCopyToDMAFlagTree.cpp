@@ -84,11 +84,11 @@ struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
 
   LogicalResult rewriteCopyToDma(memref::CopyOp op, OpAdaptor adaptor,
                                  ConversionPatternRewriter &rewriter) const {
-    
     auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
-    auto dmaTag = hardwareManager -> getDMATag();
-    if (!dmaTag) return failure();
-    
+    auto dmaTag = hardwareManager->getDMATag();
+    if (!dmaTag)
+      return failure();
+
     Location loc = op.getLoc();
     Value src = adaptor.getSource();
     Value dst = adaptor.getTarget();
@@ -122,19 +122,15 @@ struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
     //       * A synchronization buffer of type memref<1xi32, *>.
     //         The memory space `*` denotes a hardware-reserved region for DMA
     //         completion signaling, determined by the unified hardware layer.
+    int64_t rank = mlir::cast<MemRefType>(src.getType()).getRank();
+    srcIndices.assign(rank, zero);
+    dstIndices.assign(rank, zero);
 
     if (auto srcSubview = dyn_cast_or_null<memref::SubViewOp>(srcDef)) {
       auto dstSubview = dyn_cast<memref::SubViewOp>(dst.getDefiningOp());
-
-      srcIndices = getValueList(rewriter, loc, srcSubview.getMixedOffsets());
-      dstIndices = getValueList(rewriter, loc, dstSubview.getMixedOffsets());
       auto sizes = getValueList(rewriter, loc, srcSubview.getMixedSizes());
       numElements = getTotalElementCount(rewriter, loc, sizes);
     } else if (auto castOp = dyn_cast<memref::ReinterpretCastOp>(srcDef)) {
-      int64_t rank = mlir::cast<MemRefType>(src.getType()).getRank();
-
-      srcIndices.assign(rank, zero);
-      dstIndices.assign(rank, zero);
       auto sizes = getValueList(rewriter, loc, castOp.getMixedSizes());
       numElements = getTotalElementCount(rewriter, loc, sizes);
     } else {
@@ -163,9 +159,11 @@ struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
   matchAndRewrite(memref::CopyOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override {
 
-    // TODO: default to convert all memref.copy to memref.dma. Future will
-    // support hint for triton dsl, relative configuration will in unified
-    // hardware.
+    auto strAttr = op->getAttrOfType<mlir::StringAttr>("flagtree_hints");
+    if (!strAttr || strAttr.getValue() != "dma") {
+      return success();
+    }
+
     bool isStrideOne = false;
     Value src = adaptor.getSource();
     Operation *srcDef = src.getDefiningOp();
