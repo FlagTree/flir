@@ -79,8 +79,7 @@ public:
     // Pass selection is controlled by unified hardware configuration.
     auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
     auto dmaTag = hardwareManager -> getDMATag();
-    if (dmaTag)
-      pm.addPass(createMemrefCopyToDMAFlagTreePass());
+    if (dmaTag) pm.addPass(createMemrefCopyToDMAFlagTreePass());
 
     pm.addPass(createUnstructuredToMemrefPass());
     pm.addPass(createTritonPtrToMemrefPass());

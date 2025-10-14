@@ -84,7 +84,6 @@ struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
 
   LogicalResult rewriteCopyToDma(memref::CopyOp op, OpAdaptor adaptor,
                                  ConversionPatternRewriter &rewriter) const {
-
     auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
     auto dmaTag = hardwareManager->getDMATag();
     if (!dmaTag)
@@ -129,7 +128,6 @@ struct CopyConverter : public OpConversionPattern<memref::CopyOp> {
 
     if (auto srcSubview = dyn_cast_or_null<memref::SubViewOp>(srcDef)) {
       auto dstSubview = dyn_cast<memref::SubViewOp>(dst.getDefiningOp());
-
       auto sizes = getValueList(rewriter, loc, srcSubview.getMixedSizes());
       numElements = getTotalElementCount(rewriter, loc, sizes);
     } else if (auto castOp = dyn_cast<memref::ReinterpretCastOp>(srcDef)) {
