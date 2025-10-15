@@ -781,6 +781,40 @@ LogicalResult PtrAnalysis::rewriteAddptrOp(triton::AddPtrOp op) {
   return success();
 }
 
+LogicalResult PtrAnalysis::rewriteBitcastOp(triton::BitcastOp op) {
+  // Only rewrite bitcast on tensor of pointers.
+  auto resultType = dyn_cast<RankedTensorType>(op.getType());
+  if (!resultType) {
+    return failure();
+  }
+  auto ptrType = dyn_cast<triton::PointerType>(resultType.getElementType());
+  if (!ptrType) {
+    return failure();
+  }
+
+  OpBuilder builder(op);
+
+  PtrState state;
+  if (visitOperandBitcast(op, state, op.getLoc(), builder).failed()) {
+    return failure();
+  }
+
+  if (!isa<triton::PointerType>(state.source.getType())) {
+    return failure();
+  }
+  Value castedPtr =
+      builder.create<triton::BitcastOp>(op.getLoc(), ptrType, state.source)
+          .getResult();
+  state.source = castedPtr;
+
+  knownPtrs[op.getResult()] = state;
+
+  auto maketptrOp = state.createTTSMakeTensorPtrOp(builder, op.getLoc());
+  ptrMap.map(op.getResult(), maketptrOp.getResult());
+
+  return success();
+}
+
 LogicalResult PtrAnalysis::rewriteMakeTensorPtrOp(triton::MakeTensorPtrOp op) {
   OpBuilder builder(op);
 
@@ -1121,6 +1155,10 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op,
   }
 
   auto loadOp = builder.create<tts::LoadOp>(loc, ptr, dims, scalarOther);
+  auto strAttr = op->getAttrOfType<mlir::StringAttr>("flagtree_hints");
+  if (strAttr && !strAttr.getValue().empty()) {
+    loadOp->setAttr("flagtree_hints", strAttr);
+  }
 
   if (op->getAttr("flagtree_hints")) {
     loadOp->setAttr("flagtree_hints", op->getAttr("flagtree_hints"));
@@ -1275,6 +1313,12 @@ LogicalResult PtrAnalysis::rewriteOp(Operation *rootOp, bool useUnsafeMask) {
         .Case<triton::AddPtrOp>([&](auto addptr) {
           if (rewriteAddptrOp(addptr).failed()) {
             addptr->emitRemark("PtrAnalysis: Failed to rewrite AddPtrOp");
+          }
+          return WalkResult::advance();
+        })
+        .Case<triton::BitcastOp>([&](auto bitcast) {
+          if (rewriteBitcastOp(bitcast).failed()) {
+            bitcast->emitRemark("PtrAnalysis: Failed to rewrite BitcastOp");
           }
           return WalkResult::advance();
         })

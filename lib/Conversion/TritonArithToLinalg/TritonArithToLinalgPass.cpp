@@ -7,6 +7,7 @@
 
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Conversion/TritonArithToLinalg/TritonArithToLinalg.h"
 #include "triton-shared/Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 #include "triton-shared/Dialect/TritonTilingExt/IR/TritonTilingExtDialect.h"
@@ -26,6 +27,7 @@
 
 using namespace mlir;
 using namespace triton;
+using namespace mlir::mathext;
 
 namespace mlir {
 namespace triton {
@@ -92,7 +94,8 @@ public:
   void getDependentDialects(DialectRegistry &registry) const override {
     registry
         .insert<func::FuncDialect, arith::ArithDialect, math::MathDialect,
-                linalg::LinalgDialect, affine::AffineDialect, scf::SCFDialect,
+                mathext::MathExtDialect, linalg::LinalgDialect,
+                affine::AffineDialect, scf::SCFDialect,
                 tensor::TensorDialect, bufferization::BufferizationDialect,
                 triton::TritonDialect, ttx::TritonTilingExtDialect,
                 tts::TritonStructuredDialect>();
@@ -114,8 +117,8 @@ public:
 
     target.addLegalDialect<
         func::FuncDialect, arith::ArithDialect, math::MathDialect,
-        linalg::LinalgDialect, affine::AffineDialect, scf::SCFDialect,
-        cf::ControlFlowDialect, tensor::TensorDialect,
+        mathext::MathExtDialect, linalg::LinalgDialect, affine::AffineDialect,
+        scf::SCFDialect, cf::ControlFlowDialect, tensor::TensorDialect,
         bufferization::BufferizationDialect, ttx::TritonTilingExtDialect,
         tts::TritonStructuredDialect>();
 
@@ -123,7 +126,8 @@ public:
 
     target.addLegalOp<triton::FuncOp, triton::ReturnOp>();
 
-    target.addDynamicallyLegalDialect<arith::ArithDialect, math::MathDialect>(
+    target.addDynamicallyLegalDialect<
+        arith::ArithDialect, math::MathDialect, mathext::MathExtDialect>(
         [](Operation *op) {
           // Lower dense constant to linalg.fill
           if (auto constOp = dyn_cast<arith::ConstantOp>(op)) {

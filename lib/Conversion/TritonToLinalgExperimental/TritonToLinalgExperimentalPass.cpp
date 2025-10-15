@@ -4,9 +4,12 @@
 // Licensed under the MIT license.
 //
 //===----------------------------------------------------------------------===//
+#include "flagtree/Common/UnifiedHardware.h"
 
 #include "mlir/Dialect/Ptr/IR/PtrDialect.h"
+#include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Conversion/StructuredToMemref/StructuredToMemref.h"
+#include "triton-shared/Conversion/MemrefCopyToDMA_FlagTree/MemrefCopyToDMAFlagTree.h"
 #include "triton-shared/Conversion/TritonArithToLinalg/TritonArithToLinalg.h"
 #include "triton-shared/Conversion/TritonPtrToMemref/TritonPtrToMemref.h"
 #include "triton-shared/Conversion/TritonToLinalgExperimental/ReconcilePtrCasts.h"
@@ -29,6 +32,7 @@
 
 using namespace mlir;
 using namespace triton;
+//using namespace mlir::mathext;
 
 #define GEN_PASS_CLASSES
 #include "triton-shared/Conversion/TritonToLinalgExperimental/Passes.h.inc"
@@ -41,6 +45,7 @@ class TritonToLinalgExperimentalPass
 public:
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<func::FuncDialect, arith::ArithDialect, math::MathDialect,
+                    mathext::MathExtDialect,
                     linalg::LinalgDialect, affine::AffineDialect,
                     scf::SCFDialect, tensor::TensorDialect,
                     bufferization::BufferizationDialect, memref::MemRefDialect,
@@ -70,6 +75,12 @@ public:
     // Running this now may be too invasive and cause many IR changes, so
     // leave as a TODO for now.
     pm.addPass(createStructuredToMemrefPass());
+
+    // Pass selection is controlled by unified hardware configuration.
+    auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
+    auto dmaTag = hardwareManager -> getDMATag();
+    if (dmaTag) pm.addPass(createMemrefCopyToDMAFlagTreePass());
+
     pm.addPass(createUnstructuredToMemrefPass());
     pm.addPass(createTritonPtrToMemrefPass());
     pm.addPass(createTritonToPtrPass());

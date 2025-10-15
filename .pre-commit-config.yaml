@@ -1,0 +1,20 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: destroyed-symlinks
+      - id: check-yaml
+      - id: check-toml
+      - id: check-ast
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+      - id: detect-private-key
+      - id: debug-statements
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v16.0.6
+    hooks:
+      - id: clang-format
+        files: '^(include/triton-shared/Conversion/MemrefCopyToDMA_FlagTree/.*\.h|lib/Conversion/MemrefCopyToDMA_FlagTree/.*\.cpp|include/triton-shared/Conversion/TritonArithToLinalg/ConversionPatterns_FlagTree\.hpp)$'
+        stages: [pre-commit, pre-push, manual]

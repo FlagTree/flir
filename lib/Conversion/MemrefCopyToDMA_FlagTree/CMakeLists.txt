@@ -1,17 +1,18 @@
-add_triton_library(TritonArithToLinalg
-  TritonArithToLinalg.cpp
-  TritonArithToLinalgPass.cpp
+add_triton_library(MemrefCopyToDMAFlagTree
+  MemrefCopyToDMAFlagTree.cpp
+  MemrefCopyToDMAFlagTreePass.cpp
 
   DEPENDS
-  TritonArithToLinalgConversionPassIncGen
+  MemrefCopyToDMAFlagTreeConversionPassIncGen
+  Registrar
+  Common
 
   LINK_LIBS PUBLIC
-  MLIRLinalgTransforms
+  MLIRSCFTransforms
   MLIRArithDialect
   MLIRDialectUtils
   MLIRIR
   MLIRMathDialect
-  MLIRMathExtDialect
   MLIRPass
   MLIRTensorDialect
   MLIRTransforms
@@ -20,5 +21,4 @@ add_triton_library(TritonArithToLinalg
   TritonTransforms
   TritonTilingExtIR
   TritonStructuredIR
-  TritonSharedUtils
 )

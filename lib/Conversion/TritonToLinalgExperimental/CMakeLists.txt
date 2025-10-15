@@ -18,6 +18,7 @@ add_triton_library(TritonToLinalgExperimental
   MLIRDialectUtils
   MLIRIR
   MLIRMathDialect
+  MLIRMathExtDialect
   MLIRPass
   MLIRTensorDialect
   MLIRTransforms
@@ -30,6 +31,7 @@ add_triton_library(TritonToLinalgExperimental
 
   TritonArithToLinalg
   StructuredToMemref
+  MemrefCopyToDMAFlagTree
   TritonToStructured
   TritonToUnstructured
   TritonPtrToMemref
