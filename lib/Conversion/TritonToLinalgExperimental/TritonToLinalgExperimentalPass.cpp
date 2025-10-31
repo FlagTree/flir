@@ -10,7 +10,7 @@
 #include "mlir-ext/Dialect/MathExt/IR/MathExt.h"
 #include "triton-shared/Conversion/StructuredToMemref/StructuredToMemref.h"
 #include "triton-shared/Conversion/MemrefCopyToDMA_FlagTree/MemrefCopyToDMAFlagTree.h"
-#include "triton-shared/Conversion/SharedMemory_FlagTree/SharedMemoryFlagTree.h"
+#include "triton-shared/Conversion/NoBufferize_FlagTree/NoBufferizeFlagTree.h"
 #include "triton-shared/Conversion/TritonArithToLinalg/TritonArithToLinalg.h"
 #include "triton-shared/Conversion/TritonPtrToMemref/TritonPtrToMemref.h"
 #include "triton-shared/Conversion/TritonToLinalgExperimental/ReconcilePtrCasts.h"
@@ -81,7 +81,6 @@ public:
     auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
     auto dmaTag = hardwareManager -> getDMATag();
     if (dmaTag) pm.addPass(createMemrefCopyToDMAFlagTreePass());
-    pm.addPass(createSharedMemoryFlagTreePass());
 
     pm.addPass(createUnstructuredToMemrefPass());
     pm.addPass(createTritonPtrToMemrefPass());
@@ -91,6 +90,9 @@ public:
 
     pm.addPass(createCSEPass());
     pm.addPass(createCanonicalizerPass());
+
+    auto sharedTag = hardwareManager -> getSharedMemoryTag();
+    if (sharedTag) pm.addPass(createNoBufferizeFlagTreePass());
 
     if (failed(runPipeline(pm, getOperation()))) {
       signalPassFailure();

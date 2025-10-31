@@ -1,9 +1,9 @@
-add_triton_library(SharedMemoryFlagTree
-  SharedMemoryFlagTree.cpp
-  SharedMemoryFlagTreePass.cpp
+add_triton_library(NoBufferizeFlagTree
+  NoBufferizeFlagTree.cpp
+  NoBufferizeFlagTreePass.cpp
 
   DEPENDS
-  SharedMemoryFlagTreeConversionPassIncGen
+  NoBufferizeFlagTreeConversionPassIncGen
   Registrar
   Common
 
