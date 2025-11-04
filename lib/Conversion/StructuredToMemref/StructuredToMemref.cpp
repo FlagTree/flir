@@ -566,38 +566,32 @@ private:
   // Create a corresponding subview for each TEC and
   // specify the space it occupies in the shared memory
   memref::SubViewOp
-  createTensorSubview(tts::LoadOp op, Value ptr, Value alloc,
+  createTensorSubview(tts::LoadOp op, Value alloc,
                       ConversionPatternRewriter &rewriter) const {
     auto loc = op->getLoc();
-    auto reinterpretOp = ptr.getDefiningOp<memref::ReinterpretCastOp>();
     auto tensorType = cast<RankedTensorType>(op.getType());
     auto shape = tensorType.getShape();
-    SmallVector<OpFoldResult> offsets = reinterpretOp.getMixedOffsets();
-    SmallVector<OpFoldResult> tensorShape, modShape;
-    for (int64_t dim : tensorType.getShape()) {
+    auto rank = tensorType.getRank();
+    SmallVector<OpFoldResult> tensorShape;
+    for (int64_t dim : shape) {
       tensorShape.push_back(rewriter.getIndexAttr(dim));
-      int64_t sharedDim = ShapedType::isDynamic(dim) ? dim : dim * 4;
-      modShape.push_back(rewriter.getIndexAttr(sharedDim));
     }
-    SmallVector<OpFoldResult> strides(tensorType.getRank(),
-                                      rewriter.getIndexAttr(1));
+    SmallVector<OpFoldResult> strides(rank, rewriter.getIndexAttr(1));
     auto func = op->getParentOfType<FunctionOpInterface>();
     unsigned totalArgs = func.getNumArguments();
     // offsets = (pid % TEC_Number) * block_size
     // offstes represents the corresponding initial offset value
     // of each TEC in the shared memory
-    SmallVector<OpFoldResult> modOffsets(tensorType.getRank(),
-                                         rewriter.getIndexAttr(0));
+    SmallVector<OpFoldResult> modOffsets(rank, rewriter.getIndexAttr(0));
     Value c4 = rewriter.create<arith::ConstantIndexOp>(loc, 4);
-    for (unsigned dim = 0; dim < tensorType.getRank(); ++dim) {
+    for (unsigned dim = 0; dim < rank; dim++) {
       Value pid = func.getArgument(totalArgs - 3 + dim);
       Value pidIndex = rewriter.create<arith::IndexCastOp>(
           loc, rewriter.getIndexType(), pid);
       Value mod = rewriter.create<arith::RemUIOp>(loc, pidIndex, c4);
-      Value cShape = rewriter.create<arith::ConstantIndexOp>(
-          loc, tensorType.getShape()[dim]);
-      Value modOffsetsVal = rewriter.create<arith::MulIOp>(loc, mod, cShape);
-      modOffsets[dim] = modOffsetsVal;
+      Value cShape = rewriter.create<arith::ConstantIndexOp>(loc, shape[dim]);
+      modOffsets[dim] =
+          rewriter.create<arith::MulIOp>(loc, mod, cShape).getResult();
     }
 
     return rewriter.create<memref::SubViewOp>(loc, alloc, modOffsets,
@@ -663,9 +657,9 @@ private:
         // corresponding TEC in shared memory and converting it into tensor form
         SmallVector<OpFoldResult> strides(tensorType.getRank(),
                                           rewriter.getIndexAttr(1));
-        auto tensorSubview = createTensorSubview(op, ptr, alloc, rewriter);
+        auto tensorSubview = createTensorSubview(op, alloc, rewriter);
         tensorSubview->setAttr("flagtree_hints",
-                        rewriter.getStringAttr("shared_memory"));
+                               rewriter.getStringAttr("shared_memory"));
         rewriter.create<memref::CopyOp>(loc, ptr, tensorSubview);
         Value tensor = rewriter.create<bufferization::ToTensorOp>(
             loc, tensorType, tensorSubview, true /* restrict */,
@@ -747,10 +741,10 @@ private:
       // When shared memory is used, only the space occupied
       // by the corresponding TEC is filled
       if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() == 8) {
-        fillMem = createTensorSubview(op, ptr, alloc, rewriter).getResult();
+        fillMem = createTensorSubview(op, alloc, rewriter).getResult();
         auto fillDefiningOp = fillMem.getDefiningOp();
         fillDefiningOp->setAttr("flagtree_hints",
-                        rewriter.getStringAttr("shared_memory"));
+                                rewriter.getStringAttr("shared_memory"));
       } else {
         fillMem = alloc;
       }
@@ -794,9 +788,9 @@ private:
         // convert memref into tensor form for subsequent computations
         SmallVector<OpFoldResult> strides(tensorType.getRank(),
                                           rewriter.getIndexAttr(1));
-        auto tensorSubview = createTensorSubview(op, ptr, alloc, rewriter);
+        auto tensorSubview = createTensorSubview(op, alloc, rewriter);
         tensorSubview->setAttr("flagtree_hints",
-                        rewriter.getStringAttr("shared_memory"));
+                               rewriter.getStringAttr("shared_memory"));
         // dstSubview represents moving to the
         // specified TEC space of shared memory
         auto modOffsets = tensorSubview.getMixedOffsets();
