@@ -1160,6 +1160,10 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op,
     loadOp->setAttr("flagtree_hints", strAttr);
   }
 
+  if (op->getAttr("flagtree_hints")) {
+    loadOp->setAttr("flagtree_hints", op->getAttr("flagtree_hints"));
+  }
+
   LLVM_DEBUG({
     llvm::dbgs() << "creating tts::load:\n";
     loadOp->dump();
