@@ -36,4 +36,7 @@ add_triton_library(TritonToLinalgExperimental
   TritonToUnstructured
   TritonPtrToMemref
   UnstructuredToMemref
+#for ascend
+  TritonToHFusion
+  TritonToHIVM
 )
