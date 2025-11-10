@@ -666,7 +666,11 @@ private:
             true /* writable */);
         rewriter.replaceOp(op, tensor);
       } else {
-        rewriter.create<memref::CopyOp>(loc, ptr, alloc);
+        auto copyOp = rewriter.create<memref::CopyOp>(loc, ptr, alloc);
+        auto strAttr = op->getAttrOfType<mlir::StringAttr>("flagtree_hints");
+        if (strAttr && !strAttr.getValue().empty()) {
+          copyOp->setAttr("flagtree_hints", strAttr);
+        }
       }
     }
 
@@ -808,7 +812,12 @@ private:
       } else {
         memref::SubViewOp dstSubview =
             getSubview(tensorType.getRank(), mixedDims, alloc, loc, rewriter);
-        rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
+        auto copyOp =
+            rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
+        auto strAttr = op->getAttrOfType<mlir::StringAttr>("flagtree_hints");
+        if (strAttr && !strAttr.getValue().empty()) {
+          copyOp->setAttr("flagtree_hints", strAttr);
+        }
       }
     }
     if (cast<MemRefType>(alloc.getType()).getMemorySpaceAsInt() != 8) {
