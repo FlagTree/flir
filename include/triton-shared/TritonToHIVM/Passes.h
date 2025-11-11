@@ -24,15 +24,10 @@
 #define TRITON_TO_HIVM_CONVERSION_PASSES_H
 
 #include "mlir/Pass/Pass.h"
+#include "triton-shared/TritonToHIVM/TritonToHIVM.h"
 
 namespace mlir {
-// Forward declarations.
-class ModuleOp;
-
 namespace triton {
-
-/// Creates a pass to convert Triton dialect to HIVM dialect.
-std::unique_ptr<OperationPass<ModuleOp>> createTritonToHIVMPass();
 
 #define GEN_PASS_REGISTRATION
 #if 0
