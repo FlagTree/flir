@@ -11,6 +11,6 @@ add_subdirectory(TritonToLLVM)
 #add_subdirectory(DiscreteMaskAccessConversion)
 #add_subdirectory(TritonToUnstructure)
 #add_subdirectory(Dialect)
-#add_subdirectory(TritonLinearize)
+add_subdirectory(TritonLinearize)
 #add_subdirectory(Utils)
 

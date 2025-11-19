@@ -17,6 +17,7 @@
 namespace mlir {
 
 class OpBuilder;
+Value materializeValue(OpBuilder &builder, Location loc, OpFoldResult ofr);
 
 // Return integer if ofr is an IntegerAttr. Note that this function differs
 // from getConstantIntValue, which returns an integer if ofr is the constant
@@ -52,7 +53,16 @@ OpFoldResult subOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
 // instruction if needed and use its result Value.
 OpFoldResult mulOFRValue(const OpFoldResult lhs, const Value rhs,
                          const Location loc, OpBuilder &b);
+////////////ASCEND
+OpFoldResult divOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
+                     const Location loc, OpBuilder &b);
 
+OpFoldResult remOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
+                     const Location loc, OpBuilder &b);
+OpFoldResult mulOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
+                     const Location loc, OpBuilder &b);
+
+/////////////ASCEND
 OpFoldResult minOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
                      const Location loc, OpBuilder &b);
 

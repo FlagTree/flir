@@ -11,10 +11,17 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "triton-shared/Analysis/OpFoldResultUtils.h"
+
 
 #include "mlir/Support/LogicalResult.h"
+#include "mlir/IR/OpDefinition.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "llvm/Support/LogicalResult.h"
+
+#include "llvm/ADT/SmallVector.h"
+#include "triton/Dialect/Triton/IR/Dialect.h"
+
 
 #include <utility>
 
@@ -23,6 +30,40 @@ namespace mlir {
 class OpBuilder;
 
 namespace triton {
+
+struct dimInfo {
+  OpFoldResult div;
+  OpFoldResult shape;
+  bool isSlt;
+  Value rhs; // rhs value of CmpIOp 
+  bool isRealDim;
+  int64_t dim;
+  dimInfo() : isSlt(false), isRealDim(false), dim(0) {}
+  dimInfo(OpFoldResult div, OpFoldResult shape, int64_t dim = 0) : div(div), shape(shape), isSlt(false), isRealDim(true), dim(dim) {}
+  bool operator==(const dimInfo &other) const {
+    auto staticDiv = getIntAttr(div);
+    auto staticShape = getIntAttr(shape);
+    auto otherShape = getIntAttr(other.shape);
+    auto otherDiv = getIntAttr(other.div);
+    assert(staticDiv.has_value() && staticDiv.has_value() && otherDiv.has_value() && otherShape.has_value() && "MaskAnalysis: do not support dynamic shape/div");
+    return staticDiv.value() == otherDiv.value() && staticShape.value() == otherShape.value() && dim == other.dim;
+  }
+  void dump() const ;
+  bool hasModulo() const {
+      auto intAttr = getIntAttr(shape);
+      if (!intAttr.has_value()) {
+          return false;
+      }
+      return intAttr.value() != 0;
+  };
+  bool hasDivision() const {
+      auto intAttr = getIntAttr(div);
+      if (!intAttr.has_value()) {
+          return false;
+      }
+      return intAttr.value() != 0;
+  };
+};
 // Data structure used to decode the pattern in a mask used for load and store.
 // start and end field represent the start and end index of a range (produced
 // by make_range, addi, etc.). While multi-dimensional data is possible, we
@@ -50,7 +91,9 @@ struct MaskState {
   SmallVector<OpFoldResult> dims;
   OpFoldResult scalar;
   const bool useUnsafeMask;
-
+  ///ASCEND
+  SmallVector<dimInfo> stateInfo;
+  
   void dump() const;
 
   MaskState(bool useUnsafeMask = false) : useUnsafeMask(useUnsafeMask) {}
@@ -80,6 +123,13 @@ struct MaskState {
   std::pair<memref::SubViewOp, memref::SubViewOp>
   getStackedSubviews(Value block1, Value block2, const Location loc,
                      OpBuilder &builder) const;
+  ////ASCEND
+  tensor::InsertSliceOp getInsertSlice(Value source, Value dest,
+                                       const Location &loc,
+                                       OpBuilder &builder) const;
+
+
+  void eraseInsertedOps(Operation *rawOp, PatternRewriter &rewriter);  
 
 private:
   // -------
@@ -156,6 +206,14 @@ private:
   // dimension that contains the range.
   LogicalResult parseExpandDims(triton::ExpandDimsOp expandDimsOp,
                                 const Location loc, OpBuilder &builder);
+///////////////////ASCEND  
+  LogicalResult parseRemsi(arith::RemSIOp remsiOp,
+                                         const Location loc,
+                                         OpBuilder &builder);
+
+  LogicalResult parseDivsi(arith::DivSIOp divsiOp,
+                                         const Location loc,
+                                         OpBuilder &builder) ;
 
   LogicalResult parseLoopIterArg(Value v, const Location loc,
                                  OpBuilder &builder);
