@@ -22,7 +22,7 @@
  */
 
 #include "mlir/Dialect/Complex/IR/Complex.h"
-
+#include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
 #include "TritonToLinalgIncubated/TritonOpConverter.h"
 #include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
