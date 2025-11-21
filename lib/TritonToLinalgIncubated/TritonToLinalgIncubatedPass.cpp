@@ -21,7 +21,7 @@
  * THE SOFTWARE.
  */
 #include "mlir/Dialect/Complex/IR/Complex.h"
-
+#include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
 #include "triton-shared/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "triton-shared/TritonToLinalgIncubated/ArgMinMaxConverter.h"
 #include "triton-shared/TritonToLinalgIncubated/FunctionConverter.h"
