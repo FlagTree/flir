@@ -21,16 +21,11 @@
  */
 
 #include "mlir/Dialect/Complex/IR/Complex.h"
-#include "mlir/Dialect/GPU/IR/GPUDialect.h"
-#include "mlir/Dialect/EmitC/IR/EmitC.h"
-#include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
-#include "triton-shared/mlir_compat.h"
 
 #include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
 #include "TritonToLinalgIncubated/LoadStoreConverter.h"
 #include "TritonToLinalgIncubated/MaskAnalysis.h"
-#include "TritonToLinalgIncubated/TritonToLinalgPass.h"
+#include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "UtilsIncubated/InterleaveOptimization.h"
 #include "UtilsIncubated/Utils.h"
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"
@@ -72,12 +67,10 @@
 
 #define DEBUG_TYPE "triton-load-store-converter"
 
-
-
 namespace LoadStoreConverter {
 using namespace mlir;
 using namespace triton;
-using namespace mlir::triton::conv;
+using namespace mlir::triton::Incubated;
 const std::string MayImplicitTransposeWithLastAxisTAG = "MayImplicitTransposeWithLastAxis";
 
 LogicalResult
@@ -1025,7 +1018,6 @@ LogicalResult
 GatherLoadConverter::matchAndRewrite(triton::GatherLoadOp op, OpAdaptor adaptor,
                                     ConversionPatternRewriter &rewriter) const {
   auto loc = op.getLoc();
-  
   // Get converted operands
   Value src = adaptor.getSrc();
   Value gatherIndices = adaptor.getGatherIndices();
@@ -1203,17 +1195,17 @@ GatherLoadConverter::matchAndRewrite(triton::GatherLoadOp op, OpAdaptor adaptor,
   // Restore insertion point
   rewriter.restoreInsertionPoint(savedInsertionPoint);
   
-   Convert memref to tensor
+  // Convert memref to tensor
   auto resultTensor = rewriter.create<bufferization::ToTensorOp>(*/
-   //   loc, resultTensorType, outputBuffer, /*restrict=*/true, /*writable=*/true);
+    //  loc, resultTensorType, outputBuffer, /*restrict=*/true, /*writable=*/true);
   
   // Mark as gather_load
- // resultTensor->setAttr("gather_load", rewriter.getUnitAttr());
+  //resultTensor->setAttr("gather_load", rewriter.getUnitAttr());
   
-  // Replace the original op
+  //Replace the original op
  // rewriter.replaceOp(op, resultTensor);
   
- // return success();
+//  return success();
 
 GatherLoadConverter::GatherLoadConverter(MLIRContext *context)
     : OpConversionPattern<triton::GatherOp>(context) {}
@@ -1316,8 +1308,7 @@ GatherLoadConverter::GatherLoadConverter(MLIRContext *context)
     rewriter.replaceOp(op, resultTensor);
 
     return success();
-
-
+  
  }
 
 } // namespace LoadStoreConverter

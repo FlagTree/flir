@@ -565,48 +565,6 @@ public:
   matchAndRewrite(triton::PtrToIntOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const override;
 };
-/*
-class EmbeddingGatherConverter : public OpConversionPattern<triton::EmbeddingGatherOp> {
-public:
-  using OpConversionPattern<triton::EmbeddingGatherOp>::OpConversionPattern;
-  LogicalResult
-  matchAndRewrite(triton::EmbeddingGatherOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override;
-private:
-  static constexpr llvm::StringRef funcNameBase = "triton_embedding_gather";
-};*/
-class EmbeddingGatherConverter : public OpConversionPattern<triton::GatherOp> {
-public:
-  using OpConversionPattern<triton::GatherOp>::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(triton::GatherOp op,
-                               typename triton::GatherOp::Adaptor adaptor,
-                               ConversionPatternRewriter &rewriter) const override ;
-
-private:
-  static constexpr llvm::StringRef funcNameBase = "triton_embedding_gather";
-};
-
-/*class IndirectLoadConverter : public OpConversionPattern<triton::IndirectLoadOp> {
-public:
-  using OpConversionPattern<triton::IndirectLoadOp>::OpConversionPattern;
-  LogicalResult
-  matchAndRewrite(triton::IndirectLoadOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override;
-private:
-  static constexpr llvm::StringRef funcNameBase = "triton_indirect_load";
-};*/
-class IndirectLoadConverter : public OpConversionPattern<triton::LoadOp> {
-public:
-  using OpConversionPattern<triton::LoadOp>::OpConversionPattern;
-
-  LogicalResult matchAndRewrite(triton::LoadOp op,
-                               typename triton::LoadOp::Adaptor adaptor,
-                               ConversionPatternRewriter &rewriter) const override;
-
-private:
-  static constexpr llvm::StringRef funcNameBase = "triton_indirect_load";
-};
 
 } // end of namespace TTOpConverters
 

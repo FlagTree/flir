@@ -34,7 +34,7 @@
 using namespace mlir;
 using namespace triton;
 using namespace dataflow;
-using namespace mlir::triton::conv;
+using namespace mlir::triton::Incubated;
 #define DEBUG_TYPE "triton-use-analysis"
 
 std::string stringifyUseType(UseType useTy) {
@@ -53,7 +53,7 @@ std::string stringifyUseType(UseType useTy) {
 
 #if LLVM_VERSION_MAJOR >= 20
 LogicalResult
-mlir::triton::conv::UseAnalysis::visitOperation(Operation *op, ArrayRef<UseInfo *> operands,
+mlir::triton::Incubated::UseAnalysis::visitOperation(Operation *op, ArrayRef<UseInfo *> operands,
                                     ArrayRef<const UseInfo *> results) {
 #else
 void triton::UseAnalysis::visitOperation(Operation *op,
@@ -224,7 +224,7 @@ void postProcessLoopOp(LoopLikeOpInterface loopOp, const DataFlowSolver &solver)
   }
 }
 
-LogicalResult mlir::triton::conv::runUseAnalysis(triton::FuncOp &funcOp) {
+LogicalResult mlir::triton::Incubated::runUseAnalysis(triton::FuncOp &funcOp) {
   MLIRContext *context = funcOp.getContext();
   SymbolTableCollection symbolTable;
 

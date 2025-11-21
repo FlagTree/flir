@@ -30,7 +30,7 @@
 
 namespace mlir {
 namespace triton {
-namespace conv { 
+namespace Incubated { 
 enum class UseType {
   Undefined, // Initial state
   DataUse,   // value used for tensor computation only
@@ -135,7 +135,7 @@ public:
 };
 
 LogicalResult runUseAnalysis(triton::FuncOp &funcOp);
-} // namespace conv
+} // namespace Incubated
 } // namespace triton
 
 } // namespace mlir

@@ -41,7 +41,7 @@ extern bool existDotFlag;
 namespace mlir {
 class ModuleOp;
 namespace triton {
-namespace conv {
+namespace Incubated {
 
 #define GEN_PASS_DECL
 std::unique_ptr<OperationPass<ModuleOp>> createTritonToLinalgIncubatedPass(bool globalKernel, bool namedOps, bool enableNd2NzOnVector);
@@ -78,7 +78,7 @@ private:
   void addProgramInfo(triton::FuncOp func, bool globalKernel);
 
   template <typename OpTy>
-  void addTensorKindToArguments(OpTy op, triton::FuncOp func,  mlir::triton::conv::TensorKind tensorKind);
+  void addTensorKindToArguments(OpTy op, triton::FuncOp func,  mlir::triton::Incubated::TensorKind tensorKind);
 
   void convertTTFunc(triton::FuncOp func, const bool existDot);
 
@@ -107,7 +107,7 @@ public:
 
   void runOnOperation() override;
 };
-} // namespace conv
+} // namespace Incubated
 } // namespace triton
 } // namespace mlir
 //#define GEN_PASS_CLASSES

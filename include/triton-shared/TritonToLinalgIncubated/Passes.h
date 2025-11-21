@@ -23,18 +23,17 @@
 #ifndef TRITON_ADAPTER_TRITON_TO_LINALG_CONVERSION_PASSES_H
 #define TRITON_ADAPTER_TRITON_TO_LINALG_CONVERSION_PASSES_H
 
-#include "triton-shared/TritonToLinalgIncubated/TritonToLinalgPass.h"
-
-namespace mlir {
-namespace triton {
-namespace conv {
+#include "triton-shared/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #define GEN_PASS_REGISTRATION
 #if 0
 #include "ascend/triton-adapter/include/TritonToLinalg/Passes.h.inc"
 #else
 #include "triton-shared/TritonToLinalgIncubated/Passes.h.inc"
 #endif
-} // namespace conv
+namespace mlir {
+namespace triton {
+namespace Incubated {
+} // namespace Incubated
 } // namespace triton
 } // namespace mlir
 

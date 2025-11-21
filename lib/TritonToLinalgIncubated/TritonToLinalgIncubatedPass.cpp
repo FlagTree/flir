@@ -20,15 +20,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "triton-shared/mlir_compat.h"
 #include "mlir/Dialect/Complex/IR/Complex.h"
-#include "mlir/Dialect/GPU/IR/GPUDialect.h"
-#include "mlir/Dialect/EmitC/IR/EmitC.h"
-#include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
 
-
-#include "triton-shared/TritonToLinalgIncubated/TritonToLinalgPass.h"
+#include "triton-shared/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "triton-shared/TritonToLinalgIncubated/ArgMinMaxConverter.h"
 #include "triton-shared/TritonToLinalgIncubated/FunctionConverter.h"
 #include "triton-shared/TritonToLinalgIncubated/LoadStoreConverter.h"
@@ -77,30 +71,11 @@
 #include <optional>
 
 #define DEBUG_TYPE "triton-to-linalg"
-/*
-namespace mlir {
-namespace gpu {
-namespace amd {
-enum class Runtime { Unknown };
-} // namespace amd
-} // namespace gpu
 
-// Missing EmitC dialect enums
-namespace emitc {
-enum class LanguageTarget { c99 };
-} // namespace emitc
-
-// Missing SPIR-V dialect enums
-namespace spirv {
-enum class ClientAPI { Unknown };
-} // namespace spirv
-
-// Missing VectorTransformsOptions
-}*/
 
 using namespace mlir;
 using namespace triton;
-using namespace mlir::triton::conv;
+using namespace mlir::triton::Incubated;
 int nd2nzFlag = 0;
 bool compileOnA5Flag = false;
 bool existDotFlag = false;
@@ -551,9 +526,7 @@ void TritonToLinalgIncubatedPass::populateTritonToLinalgCanonicalizationPatterns
     patterns.add<TTOpConverters::MakeTensorPtrCanonicalizer>(patterns.getContext());
     patterns.add<TTOpConverters::ReduceSingleCanonicalizer>(patterns.getContext());
     // FIXME: temporarily revert SelectCanonicalizer on A3
-    if (this->compileOnA5) {
-      patterns.add<TTOpConverters::SelectCanonicalizer>(patterns.getContext());
-    }
+    //patterns.add<TTOpConverters::SelectCanonicalizer>(patterns.getContext());
 }
 
 void TritonToLinalgIncubatedPass::populateTritonToLinalgConversionPatterns(
@@ -563,7 +536,7 @@ void TritonToLinalgIncubatedPass::populateTritonToLinalgConversionPatterns(
   populateFunctionOpInterfaceTypeConversionPattern<triton::FuncOp>(
       patterns, typeConverter);
 
-  patterns.add<triton::conv::MetaUseEraser>(patterns.getContext());
+  patterns.add<triton::Incubated::MetaUseEraser>(patterns.getContext());
   patterns.add<LoadStoreConverter::StoreConverter>(patterns.getContext());
   patterns.add<LoadStoreConverter::AddPtrConverter>(patterns.getContext());
   patterns.add<FunctionConverter::GetProgramIDConverter>(patterns.getContext());
@@ -603,7 +576,7 @@ void TritonToLinalgIncubatedPass::populateTritonToLinalgConversionPatterns(
   patterns.add<TTOpConverters::YieldConverter>(patterns.getContext());
   patterns.add<TTOpConverters::GatherConverter>(patterns.getContext());
   patterns.add<LoadStoreConverter::GatherLoadConverter>(patterns.getContext());
-  patterns.add<TTOpConverters::EmbeddingGatherConverter>(patterns.getContext());
+
 
   patterns.add<TTOpConverters::DeviceAssertConverter>(patterns.getContext());
   patterns.add<TTOpConverters::DevicePrintConverter>(patterns.getContext());
@@ -611,7 +584,7 @@ void TritonToLinalgIncubatedPass::populateTritonToLinalgConversionPatterns(
   patterns.add<TTOpConverters::SortOpConverter>(patterns.getContext());
   patterns.add<TTOpConverters::DotScaledConverter>(patterns.getContext());
   patterns.add<TTOpConverters::PtrToIntConverter>(patterns.getContext());
-  patterns.add<TTOpConverters::IndirectLoadConverter>(patterns.getContext());
+
 
   if (!this->namedOps) {
     linalg::populateElementwiseToLinalgConversionPatterns(patterns);
@@ -966,7 +939,7 @@ void TritonToLinalgIncubatedPass::runOnOperation() {
   });
 }
 
-std::unique_ptr<OperationPass<ModuleOp>> triton::conv::createTritonToLinalgIncubatedPass(bool globalKernel, bool namedOps, bool enableNd2NzOnVector) {
+std::unique_ptr<OperationPass<ModuleOp>> triton::Incubated::createTritonToLinalgIncubatedPass(bool globalKernel, bool namedOps, bool enableNd2NzOnVector) {
   return std::make_unique<TritonToLinalgIncubatedPass>(globalKernel, namedOps);
 }
 

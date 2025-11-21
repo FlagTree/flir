@@ -21,7 +21,7 @@
  */
 
 #include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
-#include "TritonToLinalgIncubated/TritonToLinalgPass.h"
+#include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "UtilsIncubated/Utils.h"
 
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"
@@ -1933,8 +1933,6 @@ void BlockDataParser::rewriteLoopOp(
     rewriteTerminator(conditionOp, rewriter, blockArgIdxSetForAfter, iterArgIdxMapForAfter, known);
   }
 
-  // Copy all attributes from op to newOp
-  newOp->setAttrs(op->getAttrs());
   rewriter.eraseOp(op);
 
   // Update the loop body. Manually invoke the rewrite logic on addptr and yield
@@ -1955,8 +1953,6 @@ void BlockDataParser::rewriteLoopOp(
                 loopOp && !loopOp->hasAttr("ExtractedLoadOrStore")) {
         ConversionPatternRewriter::InsertionGuard guard(rewriter);
         rewriter.setInsertionPoint(loopOp);
-        // Remove UnhandledLoopOp attr before process
-        loopOp->removeAttr("UnhandledLoopOp");
         rewriteLoopOp(loopOp, rewriter, known);
       }
     }

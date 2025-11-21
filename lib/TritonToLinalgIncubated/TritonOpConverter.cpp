@@ -22,14 +22,9 @@
  */
 
 #include "mlir/Dialect/Complex/IR/Complex.h"
-#include "mlir/Dialect/GPU/IR/GPUDialect.h"
-#include "mlir/Dialect/EmitC/IR/EmitC.h"
-#include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
-
 
 #include "TritonToLinalgIncubated/TritonOpConverter.h"
-#include "TritonToLinalgIncubated/TritonToLinalgPass.h"
+#include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
 #include "TritonToLinalgIncubated/MaskAnalysis.h"
 #include "UtilsIncubated/Utils.h"
@@ -156,7 +151,7 @@ LogicalResult SelectCanonicalizer::matchAndRewrite(
   // Analyze the mask operand to determine at runtime the size of the data we
   // are moving.
  // MaskState mstate;
-  mlir::triton::conv::MaskState mstate;
+  mlir::triton::Incubated::MaskState mstate;
   auto isContMask = mstate.parse(mask, loc, rewriter);
 
   if (isContMask.failed()) {
@@ -1997,169 +1992,5 @@ PtrToIntConverter::matchAndRewrite(triton::PtrToIntOp op, OpAdaptor adaptor,
   return success();
 }
 
-/*LogicalResult
-EmbeddingGatherConverter::matchAndRewrite(triton::EmbeddingGatherOp op, OpAdaptor adaptor,
-                                          ConversionPatternRewriter &rewriter) const {
-  
-  auto loc = op.getLoc();
-
-  auto moduleOp = op->getParentOfType<ModuleOp>();
-  rewriter.setInsertionPoint(moduleOp.getBody(),
-                             std::prev(moduleOp.getBody()->end()));
-
-  llvm::SmallString<128> funcName = funcNameBase;
-  int uniqueId = 0;
-  while (SymbolTable::lookupSymbolIn(moduleOp, funcName)) {
-    funcName = funcNameBase;
-    funcName += ("_" + std::to_string(uniqueId++));
-  }
-
-  auto src = adaptor.getSrc();
-  auto idx = op.getIdx();
-  auto bound = op.getBound();
-  auto blksiz = op.getBlocksize();
-  auto offsets = op.getOffsets();
-  auto numels = op.getNumels();
-  auto res = op.getResult();
-  auto resTy = res.getType();
-
-  // convert !tt.ptr<f32> to memref<?xf32>
-  auto srcTy = cast<MemRefType>(src.getType());
-  SmallVector<Type> inputTypes({srcTy, idx.getType(), bound.getType(),
-                                blksiz.getType()});
-  inputTypes.append(offsets.getTypes().begin(), offsets.getTypes().end());
-  inputTypes.append(numels.getTypes().begin(), numels.getTypes().end());
-  auto libFnType = rewriter.getFunctionType(inputTypes, {resTy});
-  auto funcOp = rewriter.create<func::FuncOp>(loc, funcName.str(), libFnType);
-  SymbolTable::setSymbolVisibility(funcOp, SymbolTable::Visibility::Private);
-
-  rewriter.setInsertionPoint(op);
-  SmallVector<Value> inputVals({src, idx, bound, blksiz});
-  inputVals.append(offsets.begin(), offsets.end());
-  inputVals.append(numels.begin(), numels.end());
-  auto callOp = rewriter.create<func::CallOp>(loc, funcOp.getSymNameAttr(),
-                                              TypeRange({resTy}),
-                                              inputVals);
-
-  rewriter.replaceOp(op, callOp);
-  return success();
-}*/
-
-LogicalResult EmbeddingGatherConverter::matchAndRewrite(
-    triton::GatherOp op,
-    typename triton::GatherOp::Adaptor adaptor,
-    ConversionPatternRewriter &rewriter) const {
-
-  auto loc = op.getLoc();
-  auto moduleOp = op->getParentOfType<ModuleOp>();
-
-  // 新函数名生成
-  llvm::SmallString<128> funcName = funcNameBase;
-  int uniqueId = 0;
-  while (SymbolTable::lookupSymbolIn(moduleOp, funcName)) {
-    funcName = funcNameBase;
-    funcName += ("_" + std::to_string(uniqueId++));
-  }
-
-  // GatherOp 的合法 API
-  auto src = op.getOperand(0);
-  auto idx = op.getOperand(1);
-  auto res = op.getResult();
-  auto resTy = res.getType();
-
-  auto srcTy = cast<MemRefType>(src.getType());
-  SmallVector<Type> inputTypes({srcTy, idx.getType()});
-  auto libFnType = rewriter.getFunctionType(inputTypes, {resTy});
-
-  auto funcOp = rewriter.create<func::FuncOp>(loc, funcName.str(), libFnType);
-  SymbolTable::setSymbolVisibility(funcOp, SymbolTable::Visibility::Private);
-
-  SmallVector<Value> inputVals({src, idx});
-  auto callOp = rewriter.create<func::CallOp>(loc, funcOp.getSymNameAttr(),
-                                              TypeRange({resTy}), inputVals);
-  rewriter.replaceOp(op, callOp);
-
-  return success();
-}
-
-/*
-LogicalResult
-IndirectLoadConverter::matchAndRewrite(triton::IndirectLoadOp op, OpAdaptor adaptor,
-                                 ConversionPatternRewriter &rewriter) const {
- 
-
-  auto loc = op.getLoc();
-
-  auto moduleOp = op->getParentOfType<ModuleOp>();
-  rewriter.setInsertionPoint(moduleOp.getBody(),
-                             std::prev(moduleOp.getBody()->end()));
-
-  llvm::SmallString<128> funcName = funcNameBase;
-  int uniqueId = 0;
-  while (SymbolTable::lookupSymbolIn(moduleOp, funcName)) {
-    funcName = funcNameBase;
-    funcName += ("_" + std::to_string(uniqueId++));
-  }
-
-  auto src = adaptor.getSrc();
-  auto offsets = op.getOffsets();
-  auto mask = op.getMask();
-  auto other = op.getOther();
-  auto res = op.getResult();
-  auto resTy = res.getType();
-
-  // convert !tt.ptr<f32> to memref<?xf32>
-  auto srcTy = cast<MemRefType>(src.getType());
-  SmallVector<Type> inputTypes({srcTy, offsets.getType()});
-  if (mask) inputTypes.push_back(mask.getType());
-  if (other) inputTypes.push_back(other.getType());
-  auto libFnType = rewriter.getFunctionType(inputTypes, {resTy});
-  auto funcOp = rewriter.create<func::FuncOp>(loc, funcName.str(), libFnType);
-  SymbolTable::setSymbolVisibility(funcOp, SymbolTable::Visibility::Private);
-
-  rewriter.setInsertionPoint(op);
-  SmallVector<Value> inputVals({src, offsets});
-  if (mask)  inputVals.push_back(mask);
-  if (other) inputVals.push_back(other);
-  auto callOp = rewriter.create<func::CallOp>(loc, funcOp.getSymNameAttr(), 
-                                              TypeRange({resTy}),
-                                              inputVals);
-  rewriter.replaceOp(op, callOp);
-  return success();
-}*/
-LogicalResult IndirectLoadConverter::matchAndRewrite(
-    triton::LoadOp op,
-    typename triton::LoadOp::Adaptor adaptor,
-    ConversionPatternRewriter &rewriter) const {
-
-  auto loc = op.getLoc();
-  auto moduleOp = op->getParentOfType<ModuleOp>();
-
-  llvm::SmallString<128> funcName = funcNameBase;
-  int uniqueId = 0;
-  while (SymbolTable::lookupSymbolIn(moduleOp, funcName)) {
-    funcName = funcNameBase;
-    funcName += ("_" + std::to_string(uniqueId++));
-  }
-
-  // LoadOp 的合法 API
-  auto src = op.getOperand(0);  
-  auto res = op.getResult();
-  auto resTy = res.getType();
-
-  auto srcTy = cast<MemRefType>(src.getType());
-  SmallVector<Type> inputTypes({srcTy});
-  auto libFnType = rewriter.getFunctionType(inputTypes, {resTy});
-
-  auto funcOp = rewriter.create<func::FuncOp>(loc, funcName.str(), libFnType);
-  SymbolTable::setSymbolVisibility(funcOp, SymbolTable::Visibility::Private);
-
-  SmallVector<Value> inputVals({src});
-  auto callOp = rewriter.create<func::CallOp>(loc, funcOp.getSymNameAttr(),
-                                              TypeRange({resTy}), inputVals);
-  rewriter.replaceOp(op, callOp);
-
-  return success();
-}
 } // namespace TTOpConverters
 

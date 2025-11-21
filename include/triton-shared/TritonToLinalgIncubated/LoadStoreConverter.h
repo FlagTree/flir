@@ -250,7 +250,7 @@ class GatherLoadConverter : public OpConversionPattern<triton::GatherOp>
 {	
 public:
   explicit GatherLoadConverter(MLIRContext *context);
-//  using OpConversionPattern<triton::GatherLoadOp>::OpConversionPattern;
+ // using OpConversionPattern<triton::GatherLoadOp>::OpConversionPattern;
   using OpConversionPattern<triton::GatherOp>::OpConversionPattern;
   LogicalResult 
   matchAndRewrite(triton::GatherOp op,  typename triton::GatherOp::Adaptor adaptor,

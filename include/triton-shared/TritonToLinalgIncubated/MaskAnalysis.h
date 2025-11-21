@@ -37,7 +37,7 @@ class OpBuilder;
 
 namespace triton {
 
-namespace conv{	
+namespace Incubated{	
 // use to decode the pattern in a mask used for load and store
 
 class MaskState {
