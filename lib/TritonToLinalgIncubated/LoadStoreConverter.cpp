@@ -22,6 +22,10 @@
 
 #include "mlir/Dialect/Complex/IR/Complex.h"
 #include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
+#include "mlir/Conversion/GPUToROCDL/Runtimes.h"
+#include "mlir/Conversion/MathToEmitC/MathToEmitC.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVEnums.h.inc"
+
 #include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
 #include "TritonToLinalgIncubated/LoadStoreConverter.h"
 #include "TritonToLinalgIncubated/MaskAnalysis.h"
