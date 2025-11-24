@@ -24,7 +24,7 @@
 #include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
 #include "mlir/Conversion/GPUToROCDL/Runtimes.h"
 #include "mlir/Conversion/MathToEmitC/MathToEmitC.h"
-#include "mlir/Dialect/SPIRV/IR/SPIRVEnums.h.inc"
+#include "mlir/Dialect/SPIRV/IR/SPIRVEnums.h"
 
 #include "triton-shared/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "triton-shared/TritonToLinalgIncubated/ArgMinMaxConverter.h"
