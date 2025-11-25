@@ -119,8 +119,11 @@ std::optional<int64_t> getLastStrideOfReinterpretCastOp(memref::ReinterpretCastO
 }
 
 bool isaPermutedMemRefType(MemRefType memRefType) {
-// auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+ #if LLVM_VERSION_MAJOR < 21
+ auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+ #else //triton_v3.3.x
  auto [ptrStrides, ptrOffsets] = memRefType.getStridesAndOffset();
+ #endif
     	LLVM_DEBUG({
     llvm::dbgs()<<"---------- [BEG] ptrStrides ----------\n";
     for(auto stride: ptrStrides)llvm::dbgs()<<stride<<" ";llvm::dbgs()<<"\n";
