@@ -20,7 +20,7 @@
  * THE SOFTWARE.
  */
 
-#include "triton-shared/TritonToUnstructureIncubated/BubbleUpOperation.h"
+#include "triton-shared/BubbleUpOperation/BubbleUpOperation.h"
 #include "triton-shared/UtilsIncubated/Utils.h"
 
 #include "mlir/Pass/PassManager.h"

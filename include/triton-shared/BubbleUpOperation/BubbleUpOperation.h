@@ -28,10 +28,10 @@
 #include "mlir/IR/PatternMatch.h"
 
 #define GEN_PASS_DECL_BUBBLEUPOPERATION
-#include "triton-shared/TritonToUnstructureIncubated/Passes.h.inc"
+#include "triton-shared/BubbleUpOperation/Passes.h.inc"
 
 #define GEN_PASS_DEF_BUBBLEUPOPERATION
-#include "triton-shared/TritonToUnstructureIncubated/Passes.h.inc"
+#include "triton-shared/BubbleUpOperation/Passes.h.inc"
 
 namespace mlir {
 namespace triton {

@@ -14,4 +14,5 @@ add_subdirectory(TritonToUnstructureIncubated)
 #add_subdirectory(Dialect)
 add_subdirectory(TritonLinearize)
 add_subdirectory(UtilsIncubated)
+add_subdirectory(BubbleUpOperation)
 

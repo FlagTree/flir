@@ -3,21 +3,12 @@
 
 include "mlir/Pass/PassBase.td"
 
-def TritonToUnstructureIncubated : Pass<"triton-to-unstructure", "mlir::ModuleOp"> {
-    let summary = "Convert Triton for unstructure case";
+def TritonToUnstructureIncubated : Pass<"triton-to-unstructure-incubated", "mlir::ModuleOp"> {
+    let summary = "Convert Triton for unstructureIncubated case";
     let constructor = "triton::createTritonToUnstructureIncubatedPass()";
     let options = [
         Option<"forceScalarizeMode", "force-scalarize-mode", "bool", "false", 
            "Scalarize unstructured memory access even if structured dimensions are mixed.">,
-    ];
-}
-
-def BubbleUpOperation : Pass<"bubble-up-operation", "mlir::ModuleOp"> {
-    let summary = "Apply bubble up operation optimization";
-    let constructor = "triton::createBubbleUpOperationPass()";
-    let options = [
-        Option<"enableAggressiveMode", "enable-aggressive-mode", "bool", "true", 
-           "Enable aggressive bubble up operation.">,
     ];
 }
 
