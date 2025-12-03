@@ -72,9 +72,6 @@ private:
   bool globalKernel;
   bool namedOps;
   bool enableNd2NzOnVector;
-  // grid�~^~D�~@|  num_programs 3维, program_id 3维
-  // remember 'xxxOp' is usually a Pointer, so that we can change target memory
-  // without giving a reference argument
   void addProgramInfo(triton::FuncOp func, bool globalKernel);
 
   template <typename OpTy>
@@ -84,7 +81,6 @@ private:
 
   LogicalResult convertMultipleBlockControlFlow(Operation *funcOp,
                                                 OpBuilder &builder);
-  // �~D�~P~F�~L�~W�~Z~Dif/else
   scf::IfOp transformNestedIfElse(Operation &nestedBranch, OpBuilder &builder);
 
   void addDynamicLegal(ConversionTarget &target,

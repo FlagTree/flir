@@ -4,6 +4,7 @@
 // Licensed under the MIT license.
 //
 //===----------------------------------------------------------------------===//
+#include "flagtree/Common/UnifiedHardware.h"
 
 #include "triton-shared/Analysis/MaskAnalysis.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -43,6 +44,8 @@ void dimInfo::dump() const {
 /////////////ascend
 LogicalResult MaskState::parse(Value operand, const Location loc,
                                OpBuilder &builder) {
+  auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
+  auto ascendTag = hardwareManager -> getAscendTag();
   if (auto op = operand.getDefiningOp<arith::ConstantOp>()) {
     return this->parseConstant(op, loc, builder);
   } else if (isa<IntegerType>(operand.getType())) {
@@ -65,11 +68,16 @@ LogicalResult MaskState::parse(Value operand, const Location loc,
     return this->parseLoopIterArg(operand, loc, builder);
   } else if (auto op = operand.getDefiningOp<arith::ExtSIOp>()) {
     return this->parseExtSI(op, loc, builder);
-  }
-  else if (auto op = operand.getDefiningOp<arith::RemSIOp>()) {
-    return this->parseRemsi(op, loc, builder);
+  } else if (auto op = operand.getDefiningOp<arith::RemSIOp>()) {
+    if (ascendTag)
+      return this->parseRemsi(op, loc, builder);
+    else
+      return failure();
   } else if (auto op = operand.getDefiningOp<arith::DivSIOp>()) {
-    return this->parseDivsi(op, loc, builder);
+    if (ascendTag)
+      return this->parseDivsi(op, loc, builder);
+    else
+      return failure();
   }   
   else {
     return failure();

@@ -3,8 +3,8 @@
 
 include "mlir/Pass/PassBase.td"
 
-def TritonToUnstructureIncubated : Pass<"triton-to-unstructure", "mlir::ModuleOp"> {
-    let summary = "Convert Triton for unstructure case";
+def TritonToUnstructureIncubated : Pass<"triton-to-unstructure-incubated", "mlir::ModuleOp"> {
+    let summary = "Convert Triton for unstructure case(Incubated)";
     let constructor = "triton::createTritonToUnstructureIncubatedPass()";
     let options = [
         Option<"forceScalarizeMode", "force-scalarize-mode", "bool", "false", 

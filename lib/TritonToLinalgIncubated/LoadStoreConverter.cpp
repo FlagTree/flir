@@ -328,8 +328,11 @@ LoadConverter::matchAndRewrite(triton::LoadOp op, OpAdaptor adaptor,
       return failure();
     } else {
       // If last dimension stride equals 2, try deinterleave optimization.
+#if LLVM_VERSION_MAJOR < 21
+      auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+#else //triton_v3.3.x
       auto [ptrStrides, ptrOffsets] = memRefType.getStridesAndOffset();
-      //auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+#endif
       if (ptrStrides.back() == 2 && (memRefShape.back() % 2 == 0) &&
           mlir::triton::DeinterleaveStatusOptimization(op, adaptor, rewriter)
               .succeeded()) {
@@ -372,8 +375,11 @@ LoadConverter::matchAndRewrite(triton::LoadOp op, OpAdaptor adaptor,
   if (mstate.getRank() == memRefType.getRank() &&
       isConstantIntValue(mstate.offsets.back(), 0) &&
       isConstantIntValue(mstate.dims.back(), memRefType.getShape().back())) {
-    auto [ptrStrides, ptrOffsets] = memRefType.getStridesAndOffset();
-     //auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+#if LLVM_VERSION_MAJOR < 21
+     auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+#else //triton_v3.3.x
+     auto [ptrStrides, ptrOffsets] = memRefType.getStridesAndOffset();
+#endif
     if (ptrStrides.back() == 2 && (memRefType.getShape().back() % 2 == 0) &&
         DeinterleaveStatusWithMaskOptimization(op, adaptor, rewriter, mstate,
                                                allocOp)
@@ -391,8 +397,11 @@ LoadConverter::matchAndRewrite(triton::LoadOp op, OpAdaptor adaptor,
     memref::SubViewOp srcSubView = mstate.getSubview(ptr, loc, rewriter);
     memref::SubViewOp dstSubView = mstate.getSubview(allocOp, loc, rewriter);
     MemRefType dstSubViewType = mlir::cast<MemRefType>(dstSubView.getType());
+#if LLVM_VERSION_MAJOR < 21
+    auto [srcStrides, srcOffset] = getStridesAndOffset(dstSubViewType);
+#else //triton_v3.3.x
     auto [srcStrides, srcOffset] = dstSubViewType.getStridesAndOffset();
-    //auto [srcStrides, srcOffset] = getStridesAndOffset(dstSubViewType);
+#endif
     MemRefType castType = MemRefType::get(
       dstSubViewType.getShape(),
       dstSubViewType.getElementType(),
