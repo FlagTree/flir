@@ -45,7 +45,7 @@ void dimInfo::dump() const {
 LogicalResult MaskState::parse(Value operand, const Location loc,
                                OpBuilder &builder) {
   auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
-  auto ascendTag = hardwareManager -> getAscendTag();
+  auto incubatedTag = hardwareManager -> getIncubatedTag();
   if (auto op = operand.getDefiningOp<arith::ConstantOp>()) {
     return this->parseConstant(op, loc, builder);
   } else if (isa<IntegerType>(operand.getType())) {
@@ -69,12 +69,12 @@ LogicalResult MaskState::parse(Value operand, const Location loc,
   } else if (auto op = operand.getDefiningOp<arith::ExtSIOp>()) {
     return this->parseExtSI(op, loc, builder);
   } else if (auto op = operand.getDefiningOp<arith::RemSIOp>()) {
-    if (ascendTag)
+    if (incubatedTag)
       return this->parseRemsi(op, loc, builder);
     else
       return failure();
   } else if (auto op = operand.getDefiningOp<arith::DivSIOp>()) {
-    if (ascendTag)
+    if (incubatedTag)
       return this->parseDivsi(op, loc, builder);
     else
       return failure();
