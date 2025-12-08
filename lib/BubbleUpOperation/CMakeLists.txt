@@ -1,9 +1,8 @@
-add_triton_library(TritonToUnstructureIncubated
-	UnstructureConversionPass.cpp
-        OffsetAnalysis.cpp
+add_triton_library(BubbleUpOperation
+        BubbleUpOperation.cpp
 
   DEPENDS
-  TritonToUnstructureConversionPassIncGen
+  BubbleUpOperationConversionPassIncGen
 
   LINK_LIBS PUBLIC
   MLIRArithDialect
