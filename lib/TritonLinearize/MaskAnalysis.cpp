@@ -1,33 +1,57 @@
-//===----------------------------------------------------------------------===//
-//
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
-//
-//===----------------------------------------------------------------------===//
-#include "flagtree/Common/UnifiedHardware.h"
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 
-#include "triton-shared/Analysis/MaskAnalysis.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Support/LogicalResult.h"
+#include "TritonLinearize/OpFoldResultUtils.h"
+#include "TritonLinearize/MaskAnalysis.h"
 
-#include "triton-shared/Analysis/OpFoldResultUtils.h"
+#include "Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 
-#include "triton-shared/Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
-
 #include "mlir/Transforms/DialectConversion.h"
 
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/LogicalResult.h"
 #include <cassert>
-#define DEBUG_TYPE "MaskAnalysis"
-#include "llvm/Support/Debug.h"
+#include <cstddef>
+
+#include "Utils/Utils.h"
+#include "triton/Dialect/Triton/IR/Dialect.h"
+#include "mlir/Dialect/Utils/StaticValueUtils.h"
+#include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Operation.h"
+#include "mlir/Support/LLVM.h"
+
+#include "llvm/ADT/TypeSwitch.h"
+#define DEBUG_TYPE "triton-linearize-mask-analysis"
+
 namespace mlir {
 
-namespace triton {
-///////////ascend
+namespace triton_linearize {
+
 void dimInfo::dump() const {
     LLVM_DEBUG({
        llvm::dbgs() << "MaskDimInfo: \n" ;
@@ -35,17 +59,34 @@ void dimInfo::dump() const {
        llvm::dbgs() << "shape = " << shape << "\n";
        llvm::dbgs() << "div = " << div << "\n";
        llvm::dbgs() << "isSlt = " << isSlt << "\n";
-       llvm::dbgs() << "rhs = " << rhs << "\n";
+       llvm::dbgs() << "rhs = " << rhs << "\n"; 
        llvm::dbgs() << "isRealDim = " << isRealDim << "\n";
     });
 };
+  
+
+bool MaskState::hasModulo() const {
+  for (int32_t i = 0; i < stateInfo.size(); i++) {
+    if (stateInfo[i].hasModulo()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 
-/////////////ascend
+bool MaskState::hasDivision() const {
+  for (int32_t i = 0; i < stateInfo.size(); i++) {
+    if (stateInfo[i].hasDivision()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
 LogicalResult MaskState::parse(Value operand, const Location loc,
                                OpBuilder &builder) {
-  auto hardwareManager = mlir::flagtree::createUnifiedHardwareManager();
-  auto incubatedTag = hardwareManager -> getIncubatedTag();
   if (auto op = operand.getDefiningOp<arith::ConstantOp>()) {
     return this->parseConstant(op, loc, builder);
   } else if (isa<IntegerType>(operand.getType())) {
@@ -69,24 +110,20 @@ LogicalResult MaskState::parse(Value operand, const Location loc,
   } else if (auto op = operand.getDefiningOp<arith::ExtSIOp>()) {
     return this->parseExtSI(op, loc, builder);
   } else if (auto op = operand.getDefiningOp<arith::RemSIOp>()) {
-    if (incubatedTag)
-      return this->parseRemsi(op, loc, builder);
-    else
-      return failure();
+    return this->parseRemsi(op, loc, builder);
   } else if (auto op = operand.getDefiningOp<arith::DivSIOp>()) {
-    if (incubatedTag)
-      return this->parseDivsi(op, loc, builder);
-    else
-      return failure();
-  }   
-  else {
+    return this->parseDivsi(op, loc, builder);
+  } else {
+    llvm::dbgs() << "\033[31m" << "MaskAnalysis: compare operand produced by an "
+                    "unsupported operation\n" << "\033[0m";
+
     return failure();
   }
 }
 
-tensor::ExtractSliceOp MaskState::getExtractSlice(Value source,
-                                                  const Location loc,
-                                                  OpBuilder &builder) const {
+tensor::ExtractSliceOp
+MaskState::getExtractSlice(Value source, const Location loc,
+                           OpBuilder &builder) const {
   auto sourceType = cast<RankedTensorType>(source.getType());
   SmallVector<OpFoldResult> offsets(getRank(), builder.getIndexAttr(0));
   SmallVector<OpFoldResult> strides(getRank(), builder.getIndexAttr(1));
@@ -95,11 +132,12 @@ tensor::ExtractSliceOp MaskState::getExtractSlice(Value source,
                                                          dims, strides);
 
   return builder.create<tensor::ExtractSliceOp>(loc, dstType, source, offsets,
-                                                dims, strides);
+                                                 dims, strides);
 }
 
-memref::SubViewOp MaskState::getSubview(Value source, const Location loc,
-                                        OpBuilder &builder) const {
+memref::SubViewOp
+MaskState::getSubview(Value source, const Location loc,
+                      OpBuilder &builder) const {
   auto sourceType = cast<MemRefType>(source.getType());
   SmallVector<OpFoldResult> offsets(getRank(), builder.getIndexAttr(0));
   SmallVector<OpFoldResult> strides(getRank(), builder.getIndexAttr(1));
@@ -107,7 +145,7 @@ memref::SubViewOp MaskState::getSubview(Value source, const Location loc,
       memref::SubViewOp::inferResultType(sourceType, offsets, dims, strides);
 
   return builder.create<memref::SubViewOp>(loc, cast<MemRefType>(dstType),
-                                           source, offsets, dims, strides);
+                                            source, offsets, dims, strides);
 }
 
 static memref::SubViewOp createSubview(Value src, Location loc, OpBuilder &b,
@@ -148,8 +186,8 @@ static memref::SubViewOp createSubview(Value src, Location loc, OpBuilder &b,
 // +               +      |
 // +++++++++++++++++-------
 //
-// If we simply take the subview of `buffer_tmp`, this requires an extra
-// buffer to just hold the temporary result.
+// If we simply take the subview of `buffer_tmp`, this requires an extra buffer
+// to just hold the temporary result.
 //
 // So we can subview into block1 and block2 directly. There are 2 cases:
 //   + subview only spans block1
@@ -170,8 +208,8 @@ static memref::SubViewOp createSubview(Value src, Location loc, OpBuilder &b,
 // Let (row, col1) and (row, col2) be the dimensions of block1 and block2,
 // respectively.
 //
-// Let (rowFull, colFull), (rowView1, colView1) and (rowView2, colView2) be
-// the dimensions of the full subview, sv1, and sv2, respectively.
+// Let (rowFull, colFull), (rowView1, colView1) and (rowView2, colView2) be the
+// dimensions of the full subview, sv1, and sv2, respectively.
 //
 // + colView1 = min(colFull, col1)
 // + colView2 = colFull - colView1
@@ -213,12 +251,35 @@ MaskState::getStackedSubviews(Value block1, Value block2, const Location loc,
   return {sv1, sv2};
 }
 
+void MaskState::dump() const {
+    LLVM_DEBUG({
+    llvm::dbgs() << "scalar:" << scalar << "\n";
+    llvm::dbgs() << "dims:(";
+    for (int i=0; i < dims.size();i++ ){
+       llvm::dbgs() << dims[i] << ",";
+    }
+    llvm::dbgs() << ")\n";
+
+    llvm::dbgs() << "stateInfo:\n";
+    });
+    for (int i=0;i<stateInfo.size();i++ ){
+      stateInfo[i].dump();
+    }
+    LLVM_DEBUG({
+    llvm::dbgs() << "\n";
+    });
+    
+
+}
+
+
 LogicalResult MaskState::addStateScalar(const MaskState &state,
                                         const OpFoldResult scalar, Location loc,
                                         OpBuilder &builder) {
   start = addOFRs(state.start, scalar, loc, builder);
   end = addOFRs(state.end, scalar, loc, builder);
   dims = state.dims;
+  stateInfo = state.stateInfo;
   return success();
 }
 
@@ -244,45 +305,41 @@ LogicalResult MaskState::addStates(const MaskState &lhsState,
     return addStateScalar(lhsState, rhsState.scalar, loc, builder);
 }
 
-LogicalResult MaskState::minStateScalar(const MaskState &lhsState,
-                                        const MaskState &rhsState, Location loc,
-                                        OpBuilder &builder) {
-  if (lhsState.scalar && rhsState.scalar) {
-    dims.push_back(minOFRs(lhsState.dims[0], rhsState.dims[0], loc, builder));
-  } else if (lhsState.scalar) {
-    for (uint32_t i = 0; i < rhsState.getRank(); i++) {
-      auto lhsDim = lhsState.dims[0];
-      auto rhsDim = rhsState.dims[i];
-      dims.push_back(minOFRs(lhsDim, rhsDim, loc, builder));
-    }
-  } else if (rhsState.scalar) {
-    for (uint32_t i = 0; i < lhsState.getRank(); i++) {
-      auto lhsDim = lhsState.dims[i];
-      auto rhsDim = rhsState.dims[0];
-      dims.push_back(minOFRs(lhsDim, rhsDim, loc, builder));
-    }
-  } else {
-    InFlightDiagnostic diag =
-        emitError(loc) << "Unexpected case where both lhs and rhs are not scalars";
-    return failure();
-  }
-  return success();
-}
-
-LogicalResult MaskState::minStates(const MaskState &lhsState,
-                                   const MaskState &rhsState, Location loc,
+LogicalResult MaskState::minStates(MaskState &lhsState,
+                                   MaskState &rhsState, Location loc,
                                    OpBuilder &builder) {
-  if (lhsState.getRank() != rhsState.getRank()) {
-    InFlightDiagnostic diag =
-        emitError(loc)
-        << "Unexpected case where lhs and rhs have different ranks";
-    return failure();
+  // if (lhsState.getRank() != rhsState.getRank()) {
+  //   InFlightDiagnostic diag =
+  //       emitError(loc)
+  //       << "Unexpected case where lhs and rhs have different ranks";
+  //   return failure();
+  // }
+  // TODO 测试用
+  // llvm::dbgs() << "\033[34m" << "lhsState.rank = " << lhsState.getRank() << "\n\033[0m";
+  // llvm::dbgs() << "\033[34m" << "rhsState.rank = " << rhsState.getRank() << "\n\033[0m";
+  // llvm::dbgs() << "\033[34m" << "lhsState.stateInfo.size() = " << lhsState.stateInfo.size() << "\n\033[0m";
+  // llvm::dbgs() << "\033[34m" << "rhsState.stateInfo.size() = " << rhsState.stateInfo.size() << "\n\033[0m";
+  for (uint32_t i = 0; i < lhsState.stateInfo.size(); i++) {
+    for(uint32_t j = 0; j < rhsState.stateInfo.size(); j++){
+      if(lhsState.stateInfo[i] == rhsState.stateInfo[j]){
+        auto lhsDim = lhsState.dims[i];
+        auto rhsDim = rhsState.dims[j];
+        lhsState.dims[i] = minOFRs(lhsDim, rhsDim, loc, builder);
+        rhsState.stateInfo[j].isRealDim = false;
+      }
+    }
   }
-
-  for (uint32_t i = 0; i < lhsState.getRank(); i++) {
-    auto lhsDim = lhsState.dims[i];
-    auto rhsDim = rhsState.dims[i];
-    dims.push_back(minOFRs(lhsDim, rhsDim, loc, builder));
+  for(size_t i = 0; i < lhsState.stateInfo.size(); i++){
+    if(lhsState.stateInfo[i].isRealDim){
+      this->dims.push_back(lhsState.dims[i]);
+      this->stateInfo.push_back(lhsState.stateInfo[i]);
+    }
+  }
+  for(size_t i = 0; i < rhsState.stateInfo.size(); i++){
+    if(rhsState.stateInfo[i].isRealDim){
+      this->dims.push_back(rhsState.dims[i]);
+      this->stateInfo.push_back(rhsState.stateInfo[i]);
+    }
   }
   return success();
 }
@@ -319,17 +376,6 @@ LogicalResult MaskState::parseIntScalar(Value scalar, const Location loc,
   return success();
 }
 
-void MaskState::dump() const {
-  llvm::dbgs() << "start: " << start << "\n";
-  llvm::dbgs() << "end: " << end << "\n";
-  llvm::dbgs() << "scalar: " << scalar << "\n";
-  llvm::dbgs() << "useUnsafeMask: " << useUnsafeMask << "\n";
-  llvm::dbgs() << "dims: ";
-  for (auto dim : dims)
-    llvm::dbgs() << "\t" << dim << "\n";
-  llvm::dbgs() << "\n";
-}
-
 LogicalResult MaskState::parseAdd(arith::AddIOp addOp, const Location loc,
                                   OpBuilder &builder) {
   assert(this->isEmpty());
@@ -352,16 +398,18 @@ LogicalResult MaskState::parseAnd(arith::AndIOp andOp, const Location loc,
   MaskState lhsState;
   if (failed(lhsState.parse(andOp.getLhs(), loc, builder)))
     return failure();
-
   MaskState rhsState;
   if (failed(rhsState.parse(andOp.getRhs(), loc, builder)))
     return failure();
+  auto result = this->minStates(lhsState, rhsState, loc, builder);
 
-  // TODO(FLIR): should be isMask()
-  if(!lhsState.isMaskWithoutScalar() || !rhsState.isMaskWithoutScalar()) {
-    return this->minStateScalar(lhsState, rhsState, loc, builder);
-  }
-  return this->minStates(lhsState, rhsState, loc, builder);
+  std::sort(stateInfo.begin(), stateInfo.end(), [](const dimInfo& a, const dimInfo& b) {
+    auto staticL = getIntAttr(a.div);
+    auto staticR = getIntAttr(b.div);
+    assert(staticL.has_value() && staticR.has_value() && "PtrAnalysis: do not support dymic mask");
+    return a.dim < b.dim || (a.dim == b.dim && staticL.value() < staticR.value());
+  });
+  return result ;
 }
 
 LogicalResult MaskState::parseExtSI(arith::ExtSIOp op, const Location loc,
@@ -376,7 +424,8 @@ LogicalResult MaskState::parseCmp(arith::CmpIOp cmpOp, const Location loc,
 
   if (cmpOp.getPredicate() != arith::CmpIPredicate::slt &&
       cmpOp.getPredicate() != arith::CmpIPredicate::ult &&
-      cmpOp.getPredicate() != arith::CmpIPredicate::sge) {
+      cmpOp.getPredicate() != arith::CmpIPredicate::sge &&
+      cmpOp.getPredicate() != arith::CmpIPredicate::uge) {
     InFlightDiagnostic diag = emitError(loc) << "Unsupported cmpi";
     return failure();
   }
@@ -388,18 +437,10 @@ LogicalResult MaskState::parseCmp(arith::CmpIOp cmpOp, const Location loc,
   MaskState rhsState;
   if (failed(rhsState.parse(cmpOp.getRhs(), loc, builder)))
     return failure();
+  // lhs must be a Value and rhs must be scalar 
+  assert((!lhsState.scalar && rhsState.scalar) && "Unsupported cmpi scenario");
 
-  // We only support sge against 0 for lower bounds. Dims already has an
-  // implicit assumption that the lower bound is 0, so if we see this, assume
-  // the comparison evaluates to true.
-  if (cmpOp.getPredicate() == arith::CmpIPredicate::sge
-    && !(rhsState.scalar && hasConstZero(rhsState.scalar))) {
-    InFlightDiagnostic diag = emitError(loc)
-                              << "Unsupported cmpi with rhs not equal to 0";
-    return failure();
-  }
-
-  int32_t cmpDim = lhsState.scalar && rhsState.scalar ? 0 : -1;
+  int32_t cmpDim = -1;
   for (int32_t i = 0; i < lhsState.getRank(); i++) {
     auto dimIntAttr = getIntAttr(lhsState.dims[i]);
     if (!dimIntAttr || dimIntAttr.value() != 1) {
@@ -415,50 +456,52 @@ LogicalResult MaskState::parseCmp(arith::CmpIOp cmpOp, const Location loc,
   assert(cmpDim != -1 &&
          "Unexpected case where no dimension has size larger than 1");
 
+// Important:
+  // In the case where the values we are loading are entirely masked off like
+  // the following:
+  //
+  // ---|-------|-----------|
+  //    ^       ^           ^
+  //   scalar  start       end
+  //
+  // newEnd = min(end, scalar) = scalar
+  // Now scalar < start, so simply doing dim = newEnd - start is incorrect.
+  //
+  // The correct formula is to optionally move `newDim` back to `start` using
+  // max(newEnd, start).
   OpFoldResult newDim;
-  if (lhsState.scalar) {
-    assert(rhsState.scalar && "Unexpected case where rhs is not a scalar");
-    // If both lhs and rhs are scalars, we can't just derive the dimension of
-    // the mask as the minimum value: lhs/rhs could be 0 and then we don't
-    // load/store anything.
-    //
-    // Instead treat the comparison as a scalar that determines if anything
-    // should be loaded/stored by inserting a comparison + select:
-    //    dim = lhs < rhs ? lhs.dim : 0
-    newDim = compareOFRs(lhsState.scalar, rhsState.scalar, cmpOp.getPredicate(),
-                  lhsState.dims[cmpDim], builder.getIndexAttr(0),
-                  loc, builder);
-  } else if (cmpOp.getPredicate() == arith::CmpIPredicate::slt ||
-    cmpOp.getPredicate() == arith::CmpIPredicate::ult) {
-    // Important:
-    // In the case where the values we are loading are entirely masked off like
-    // the following:
-    //
-    // ---|-------|-----------|
-    //    ^       ^           ^
-    //   scalar  start       end
-    //
-    // newEnd = min(end, scalar) = scalar
-    // Now scalar < start, so simply doing dim = newEnd - start is incorrect.
-    //
-    // The correct formula is to optionally move `newDim` back to `start` using
-    // max(newEnd, start).
-    auto newEnd = minOFRs(lhsState.end, rhsState.scalar, loc, builder);
+  OpFoldResult newEnd;
+  OpFoldResult newStart;
+  bool isSlt;
+  if (cmpOp.getPredicate() == arith::CmpIPredicate::slt ||
+     cmpOp.getPredicate() == arith::CmpIPredicate::ult){
+    newEnd = minOFRs(lhsState.end, rhsState.scalar, loc, builder);
     newEnd = maxOFRs(newEnd, lhsState.start, loc, builder);
     newDim = subOFRs(newEnd, lhsState.start, loc, builder);
+    isSlt = true;
   } else {
-    assert(cmpOp.getPredicate() == arith::CmpIPredicate::sge && rhsState.scalar
-           && hasConstZero(rhsState.scalar));
-    newDim = lhsState.dims[cmpDim];
+    newStart = maxOFRs(lhsState.start, rhsState.scalar, loc, builder);
+    newStart = minOFRs(newStart, lhsState.end, loc, builder);
+    newDim = subOFRs(lhsState.end, newStart, loc, builder);
+    isSlt = false;
   }
 
+  this->stateInfo = lhsState.stateInfo;
+
   for (int32_t i = 0; i < lhsState.getRank(); i++) {
-    if (i == cmpDim)
+    if (i == cmpDim){
       this->dims.push_back(newDim);
+      this->stateInfo[i].isSlt = isSlt;
+      
+      auto rhs = materializeValue(builder, loc, cmpOp.getRhs()); 
+      if (auto op = rhs.getDefiningOp<triton::SplatOp>()){
+        rhs = op.getSrc() ;
+      }
+      this->stateInfo[i].rhs = materializeValue(builder, loc, isSlt?newEnd:newStart);
+    }
     else
       this->dims.push_back(lhsState.dims[i]);
   }
-
   return success();
 }
 
@@ -535,6 +578,9 @@ LogicalResult MaskState::parseMakeRange(triton::MakeRangeOp rangeOp,
   this->start = builder.getIndexAttr(start);
   this->end = builder.getIndexAttr(end);
   this->dims.push_back(builder.getIndexAttr(shape[0]));
+  this->stateInfo.push_back(dimInfo(builder.getIndexAttr(0),
+                                    builder.getIndexAttr(0)));
+  this->stateInfo[0].isRealDim = true;
 
   return success();
 }
@@ -557,14 +603,14 @@ LogicalResult MaskState::parseBroadcast(triton::BroadcastOp broadcastOp,
   if (failed(parse(src, loc, builder)))
     return failure();
 
-  for (size_t i = 0; i < srcShape.size(); i++) {
-    if (srcShape[i] == dstShape[i])
-      continue;
-    else if (srcShape[i] < dstShape[i])
-      this->dims[i] = builder.getIndexAttr(dstShape[i]);
-    else
-      llvm_unreachable("unexpected dimensions used in broadcast");
-  }
+  // for (size_t i = 0; i < srcShape.size(); i++) {
+  //   if (srcShape[i] == dstShape[i])
+  //     continue;
+  //   else if (srcShape[i] < dstShape[i])
+  //     this->dims[i] = builder.getIndexAttr(dstShape[i]);
+  //   else
+  //     llvm_unreachable("unexpected dimensions used in broadcast");
+  // }
 
   return success();
 }
@@ -572,7 +618,6 @@ LogicalResult MaskState::parseBroadcast(triton::BroadcastOp broadcastOp,
 LogicalResult MaskState::parseSplat(triton::SplatOp splatOp, const Location loc,
                                     OpBuilder &builder) {
   assert(this->isEmpty());
-
   auto src = splatOp.getSrc();
   auto dst = splatOp.getResult();
   auto dstShape = cast<ShapedType>(dst.getType()).getShape();
@@ -589,7 +634,7 @@ LogicalResult MaskState::parseSplat(triton::SplatOp splatOp, const Location loc,
 
   for (auto s : dstShape)
     this->dims.push_back(builder.getIndexAttr(s));
-
+  
   return success();
 }
 
@@ -597,6 +642,7 @@ LogicalResult MaskState::parseExpandDims(triton::ExpandDimsOp expandDimsOp,
                                          const Location loc,
                                          OpBuilder &builder) {
   assert(this->isEmpty());
+  auto defaultAttr = builder.getIndexAttr(0);
 
   if (failed(this->parse(expandDimsOp.getSrc(), loc, builder)))
     return failure();
@@ -606,11 +652,12 @@ LogicalResult MaskState::parseExpandDims(triton::ExpandDimsOp expandDimsOp,
   auto axis = expandDimsOp.getAxis();
   assert(dstShape[axis] == 1 &&
          "expect changed dimension to be 1 in expand_dims");
-  this->dims.insert(this->dims.begin() + axis, builder.getIndexAttr(1));
+  // this->dims.insert(this->dims.begin() + axis, builder.getIndexAttr(1));
+  for(auto &info: stateInfo)  if(info.dim >= axis)  ++info.dim;
 
   return success();
 }
-////////ASCEND
+
 LogicalResult MaskState::parseRemsi(arith::RemSIOp remsiOp,
                                          const Location loc,
                                          OpBuilder &builder) {
@@ -751,7 +798,7 @@ tensor::InsertSliceOp MaskState::getInsertSlice(Value source, Value dest,
                                                 const Location &loc,
                                                 OpBuilder &builder) const {
   auto sourceType = cast<RankedTensorType>(source.getType());
-  //fixme, kaixin offsets are class member originally
+  //fixme, kaixin offsets are class member originally 
   SmallVector<OpFoldResult> offsets(getRank(), builder.getIndexAttr(0));
   SmallVector<OpFoldResult> strides(getRank(), builder.getIndexAttr(1));
   return builder.create<tensor::InsertSliceOp>(loc, source, dest, offsets, dims,
@@ -760,3 +807,4 @@ tensor::InsertSliceOp MaskState::getInsertSlice(Value source, Value dest,
 
 } // namespace triton
 } // namespace mlir
+
