@@ -7,10 +7,12 @@
 #else
 #include "triton-shared/TritonToHFusion/Passes.h"
 #endif
-
+#if __has_include("bishengir/Dialect/HFusion/IR/HFusion.h")
 #include "bishengir/Dialect/HFusion/IR/HFusion.h"
+#endif
+#if __has_include("bishengir/Dialect/Tensor/IR/TensorImpl.h")
 #include "bishengir/Dialect/Tensor/IR/TensorImpl.h"
-
+#endif
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/Pass/Pass.h"

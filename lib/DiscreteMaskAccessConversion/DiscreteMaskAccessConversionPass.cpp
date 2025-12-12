@@ -23,7 +23,10 @@
 #include "triton-shared/DiscreteMaskAccessConversion/Passes.h"
 #include "triton-shared/UtilsIncubated/Utils.h"
 
+#if __has_include("bishengir/Dialect/HIVM/IR/HIVM.h")
 #include "bishengir/Dialect/HIVM/IR/HIVM.h"
+#endif
+
 #include "mlir/IR/Attributes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"

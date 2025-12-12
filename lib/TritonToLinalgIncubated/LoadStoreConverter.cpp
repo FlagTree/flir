@@ -32,8 +32,9 @@
 #include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "UtilsIncubated/InterleaveOptimization.h"
 #include "UtilsIncubated/Utils.h"
+#if __has_include("bishengir/Dialect/Annotation/IR/Annotation.h")
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"
-
+#endif
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Utils/Utils.h"

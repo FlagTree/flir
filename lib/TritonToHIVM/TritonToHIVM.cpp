@@ -24,8 +24,9 @@
 #else
 #include "triton-shared/TritonToHIVM/Passes.h"
 #endif
-
+#if __has_include("bishengir/Dialect/HIVM/IR/HIVM.h")
 #include "bishengir/Dialect/HIVM/IR/HIVM.h"
+#endif
 #include "mlir/IR/Attributes.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"

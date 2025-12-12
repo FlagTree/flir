@@ -21,8 +21,9 @@
  */
 
 #include "triton-shared/TritonToAnnotation/Passes.h"
-
+#if __has_include("bishengir/Dialect/Annotation/IR/Annotation.h")
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"
+#endif
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
