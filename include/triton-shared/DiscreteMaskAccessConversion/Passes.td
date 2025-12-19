@@ -18,7 +18,7 @@ def DiscreteMaskAccessConversion : Pass<"discrete-mask-access-conversion", "mlir
     Option<"forceSimtTemplate", "force-simt-template", 
         "bool", /*default*/"false",
         "force to use simt template">
-  ]
+  ];
 }
 
 #endif // DISCRETE_MASK_ACCESS_CONVERSION_PASSES
