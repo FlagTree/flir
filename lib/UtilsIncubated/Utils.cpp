@@ -56,6 +56,7 @@
 #include <map>
 #include <optional>
 #include <unordered_set>
+#include <variant>
 
 #define DEBUG_TYPE "TritonNPU-Utils"
 
@@ -119,12 +120,8 @@ std::optional<int64_t> getLastStrideOfReinterpretCastOp(memref::ReinterpretCastO
 }
 
 bool isaPermutedMemRefType(MemRefType memRefType) {
- #if LLVM_VERSION_MAJOR < 21
- auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
- #else //triton_v3.3.x
- auto [ptrStrides, ptrOffsets] = memRefType.getStridesAndOffset();
- #endif
-    	LLVM_DEBUG({
+  auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+  LLVM_DEBUG({
     llvm::dbgs()<<"---------- [BEG] ptrStrides ----------\n";
     for(auto stride: ptrStrides)llvm::dbgs()<<stride<<" ";llvm::dbgs()<<"\n";
     llvm::dbgs()<<"---------- [END] ptrStrides ----------\n";
@@ -889,6 +886,11 @@ LogicalResult addReduceWithIndexAttrIfNeeded(ConversionPatternRewriter &rewriter
         {{arith::CmpIPredicate::ult, arith::CmpIPredicate::eq, arith::CmpIPredicate::ugt}, {"min_with_index", "false"}},
         {{arith::CmpIPredicate::ugt, arith::CmpIPredicate::eq, arith::CmpIPredicate::ult}, {"max_with_index", "true"}},
         {{arith::CmpIPredicate::ult, arith::CmpIPredicate::eq, arith::CmpIPredicate::ult}, {"min_with_index", "true"}},
+
+        {{arith::CmpIPredicate::ugt, arith::CmpIPredicate::eq, arith::CmpIPredicate::sgt}, {"max_with_index", "false"}},
+        {{arith::CmpIPredicate::ugt, arith::CmpIPredicate::eq, arith::CmpIPredicate::slt}, {"max_with_index", "true"}},
+        {{arith::CmpIPredicate::ult, arith::CmpIPredicate::eq, arith::CmpIPredicate::sgt}, {"min_with_index", "false"}},
+        {{arith::CmpIPredicate::ult, arith::CmpIPredicate::eq, arith::CmpIPredicate::slt}, {"min_with_index", "true"}},
     };
 
     std::vector<arith::CmpIPredicate> preds;
@@ -964,4 +966,160 @@ OpFoldResult getOpFoldResultOfLayoutInfo(Value value, OpBuilder &builder) {
   return value;
 }
 
+// Specialize the Typeless Value (Zero, Min, Max) into a mlir TypedAttr
+FailureOr<TypedAttr> specializeTypelessValueToAttr(TypelessValue value,
+                                                   Type type, OpBuilder &b) {
+  mlir::Type f16Ty = Float16Type::get(b.getContext());
+  mlir::Type f32Ty = Float32Type::get(b.getContext());
+  mlir::Type i8TySL = IntegerType::get(
+      b.getContext(), 8, IntegerType::SignednessSemantics::Signless);
+  mlir::Type i8TyS = IntegerType::get(b.getContext(), 8,
+                                      IntegerType::SignednessSemantics::Signed);
+  mlir::Type i8TyU = IntegerType::get(
+      b.getContext(), 8, IntegerType::SignednessSemantics::Unsigned);
+  mlir::Type i16TySL = IntegerType::get(
+      b.getContext(), 16, IntegerType::SignednessSemantics::Signless);
+  mlir::Type i16TyS = IntegerType::get(
+      b.getContext(), 16, IntegerType::SignednessSemantics::Signed);
+  mlir::Type i16TyU = IntegerType::get(
+      b.getContext(), 16, IntegerType::SignednessSemantics::Unsigned);
+  mlir::Type i32TySL = IntegerType::get(
+      b.getContext(), 32, IntegerType::SignednessSemantics::Signless);
+  mlir::Type i32TyS = IntegerType::get(
+      b.getContext(), 32, IntegerType::SignednessSemantics::Signed);
+  mlir::Type i32TyU = IntegerType::get(
+      b.getContext(), 32, IntegerType::SignednessSemantics::Unsigned);
+  mlir::Type i64TySL = IntegerType::get(
+      b.getContext(), 64, IntegerType::SignednessSemantics::Signless);
+  mlir::Type i64TyS = IntegerType::get(
+      b.getContext(), 64, IntegerType::SignednessSemantics::Signed);
+  mlir::Type i64TyU = IntegerType::get(
+      b.getContext(), 64, IntegerType::SignednessSemantics::Unsigned);
+  llvm::APFloat halfZero = llvm::APFloat::getZero(llvm::APFloat::IEEEhalf());
+  llvm::APFloat halfOne(llvm::APFloat::IEEEhalf(), 1);
+  llvm::APFloat halfMax = llvm::APFloat::getInf(llvm::APFloat::IEEEhalf());
+  llvm::APFloat halfMin =
+      llvm::APFloat::getInf(llvm::APFloat::IEEEhalf(), true);
+  llvm::APFloat floatZero = llvm::APFloat::getZero(llvm::APFloat::IEEEsingle());
+  llvm::APFloat floatOne(llvm::APFloat::IEEEsingle(), 1);
+  llvm::APFloat floatMax = llvm::APFloat::getInf(llvm::APFloat::IEEEsingle());
+  llvm::APFloat floatMin =
+      llvm::APFloat::getInf(llvm::APFloat::IEEEsingle(), true);
+  auto toPtr = [](mlir::Type ty) { return ty.getAsOpaquePointer(); };
+
+  std::map<std::pair<TypelessValue, const void *>,
+           std::variant<int8_t, int16_t, int32_t, int64_t, llvm::APFloat>>
+      initMap = {
+          {{TypelessValue::Zero, toPtr(f16Ty)}, halfZero},
+          {{TypelessValue::Zero, toPtr(f32Ty)}, floatZero},
+          {{TypelessValue::Zero, toPtr(i16TySL)}, (int16_t)0},
+          {{TypelessValue::Zero, toPtr(i16TyS)}, (int16_t)0},
+          {{TypelessValue::Zero, toPtr(i16TyU)}, (int16_t)0},
+          {{TypelessValue::Zero, toPtr(i32TySL)}, 0},
+          {{TypelessValue::Zero, toPtr(i32TyS)}, 0},
+          {{TypelessValue::Zero, toPtr(i32TyU)}, 0},
+          {{TypelessValue::Zero, toPtr(i64TySL)}, (int64_t)0},
+          {{TypelessValue::Zero, toPtr(i64TyS)}, (int64_t)0},
+          {{TypelessValue::Zero, toPtr(i64TyU)}, (int64_t)0},
+          {{TypelessValue::Min, toPtr(f16Ty)}, halfMin},
+          {{TypelessValue::Min, toPtr(f32Ty)}, floatMin},
+          {{TypelessValue::Min, toPtr(i16TySL)},
+           std::numeric_limits<int16_t>::min()},
+          {{TypelessValue::Min, toPtr(i16TyS)},
+           std::numeric_limits<int16_t>::min()},
+          {{TypelessValue::Min, toPtr(i16TyU)},
+           std::numeric_limits<uint16_t>::min()},
+          {{TypelessValue::Min, toPtr(i32TySL)},
+           std::numeric_limits<int32_t>::min()},
+          {{TypelessValue::Min, toPtr(i32TyS)},
+           std::numeric_limits<int32_t>::min()},
+          {{TypelessValue::Min, toPtr(i32TyU)},
+           std::numeric_limits<uint32_t>::min()},
+          {{TypelessValue::Min, toPtr(i64TySL)},
+           std::numeric_limits<int64_t>::min()},
+          {{TypelessValue::Min, toPtr(i64TyS)},
+           std::numeric_limits<int64_t>::min()},
+          {{TypelessValue::Min, toPtr(i64TyU)},
+           std::numeric_limits<int64_t>::min()},
+          {{TypelessValue::Max, toPtr(f16Ty)}, halfMax},
+          {{TypelessValue::Max, toPtr(f32Ty)}, floatMax},
+          {{TypelessValue::Max, toPtr(i16TySL)},
+           std::numeric_limits<int16_t>::max()},
+          {{TypelessValue::Max, toPtr(i16TyS)},
+           std::numeric_limits<int16_t>::max()},
+          {{TypelessValue::Max, toPtr(i16TyU)},
+           std::numeric_limits<uint16_t>::max()},
+          {{TypelessValue::Max, toPtr(i32TySL)},
+           std::numeric_limits<int32_t>::max()},
+          {{TypelessValue::Max, toPtr(i32TyS)},
+           std::numeric_limits<int32_t>::max()},
+          {{TypelessValue::Max, toPtr(i32TyU)},
+           std::numeric_limits<uint32_t>::max()},
+          {{TypelessValue::Max, toPtr(i64TySL)},
+           std::numeric_limits<int64_t>::max()},
+          {{TypelessValue::Max, toPtr(i64TyS)},
+           std::numeric_limits<int64_t>::max()},
+          {{TypelessValue::Max, toPtr(i64TyU)},
+           std::numeric_limits<int64_t>::max()},
+      };
+
+  std::pair<TypelessValue, const void *> key =
+      std::make_pair(value, toPtr(type));
+  if (initMap.find(key) == initMap.end())
+    return failure();
+  if (type.isInteger(8))
+    return success(IntegerAttr::get(IntegerType::get(b.getContext(), 8),
+                                    std::get<int8_t>(initMap.at(key))));
+  if (type.isInteger(16))
+    return success(IntegerAttr::get(IntegerType::get(b.getContext(), 16),
+                                    std::get<int16_t>(initMap.at(key))));
+  if (type.isInteger(32))
+    return success(IntegerAttr::get(IntegerType::get(b.getContext(), 32),
+                                    std::get<int32_t>(initMap.at(key))));
+  if (type.isInteger(64))
+    return success(IntegerAttr::get(IntegerType::get(b.getContext(), 64),
+                                    std::get<int64_t>(initMap.at(key))));
+  if (isa<Float16Type>(type))
+    return success(
+        FloatAttr::get(f16Ty, std::get<llvm::APFloat>(initMap.at(key))));
+  if (isa<Float32Type>(type))
+    return success(
+        FloatAttr::get(f32Ty, std::get<llvm::APFloat>(initMap.at(key))));
+  return failure();
+}
+
+// Specialize the Typeless Value (Zero, Min, Max) into a mlir constant value
+FailureOr<Value> specializeTypelessValueToConstant(TypelessValue value,
+                                                   Type type, Location loc,
+                                                   OpBuilder &b) {
+  std::function<mlir::Type(mlir::Type)> getElemType = [&](mlir::Type ty) {
+    if (auto ptrType = dyn_cast<triton::PointerType>(getElementTypeOrSelf(ty)))
+      return getElemType(ptrType.getPointeeType());
+    if (auto tensorType = mlir::dyn_cast<mlir::RankedTensorType>(ty))
+      return getElemType(tensorType.getElementType());
+    return ty;
+  };
+
+  if (value == TypelessValue::Undefined)
+    return failure();
+  if (auto tensorType = mlir::dyn_cast<mlir::RankedTensorType>(type)) {
+    auto elemType = getElemType(tensorType);
+    FailureOr<TypedAttr> typedAttr =
+        specializeTypelessValueToAttr(value, elemType, b);
+    if (failed(typedAttr))
+      return failure();
+    auto otherTensorType =
+        RankedTensorType::get(tensorType.getShape(), elemType);
+    auto denseAttr = DenseElementsAttr::get(otherTensorType, *typedAttr);
+    return b.create<mlir::arith::ConstantOp>(loc, denseAttr).getResult();
+  }
+  if (mlir::isa<mlir::FloatType>(type) || mlir::isa<mlir::IntegerType>(type)) {
+    FailureOr<TypedAttr> typedAttr =
+        specializeTypelessValueToAttr(value, type, b);
+    if (failed(typedAttr))
+      return failure();
+    return b.create<mlir::arith::ConstantOp>(loc, *typedAttr).getResult();
+  }
+  return failure();
+}
 } // namespace mlir
