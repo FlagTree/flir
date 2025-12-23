@@ -30,9 +30,12 @@
 #else
 #include "triton-shared/TritonToLinalgIncubated/Passes.h.inc"
 #endif
+
 namespace mlir {
 namespace triton {
 namespace Incubated {
+//#define GEN_PASS_REGISTRATION
+//#include "ascend/triton-adapter/include/TritonToLinalg/Passes.h.inc"
 } // namespace Incubated
 } // namespace triton
 } // namespace mlir

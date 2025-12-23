@@ -56,7 +56,7 @@ class LoadConverter : public OpConversionPattern<triton::LoadOp> {
 private:
   LogicalResult toTensorAndReplace(triton::LoadOp &op,
                                    RankedTensorType &tensorType,
-                                   memref::AllocOp &allocOp,
+                                   Value localMem,
                                    bool mayImplicitTransposeWithLastAxis,
                                    const Location &loc,
                                    ConversionPatternRewriter &rewriter) const;
@@ -68,7 +68,7 @@ private:
                                     ConversionPatternRewriter &rewriter) const;
 
   void
-  fillTensorWithOtherForMaskScenario(Value other, memref::AllocOp localMem,
+  fillTensorWithOtherForMaskScenario(Value other, Value localMem,
                                      ArrayRef<OpFoldResult> maskDim,
                                      ConversionPatternRewriter &rewriter) const;
 
@@ -204,6 +204,10 @@ private:
       }
     } else if (rmwOp == triton::RMWOp::XCHG) {
       binaryOp = rhs;
+    } else if (rmwOp == triton::RMWOp::UMAX) {
+      binaryOp = builder.create<arith::MaxUIOp>(loc, lhs, rhs);
+    } else if (rmwOp == triton::RMWOp::UMIN) {
+      binaryOp = builder.create<arith::MinUIOp>(loc, lhs, rhs);
     } else {
       op.emitOpError("unsupported atomic RMW operation: ");
       llvm_unreachable(
@@ -245,19 +249,5 @@ class AtomicMaxMinCanonicalizer : public OpRewritePattern<triton::AtomicRMWOp> {
                                 PatternRewriter &rewriter) const override;
 };
 
-//class GatherLoadConverter : public OpConversionPattern<triton::GatherLoadOp> {
-class GatherLoadConverter : public OpConversionPattern<triton::GatherOp> 
-{	
-public:
-  explicit GatherLoadConverter(MLIRContext *context);
- // using OpConversionPattern<triton::GatherLoadOp>::OpConversionPattern;
-  using OpConversionPattern<triton::GatherOp>::OpConversionPattern;
-  LogicalResult 
-  matchAndRewrite(triton::GatherOp op,  typename triton::GatherOp::Adaptor adaptor,
- //   matchAndRewrite(triton::GatherLoadOp op, OpAdaptor adaptor,
-                  ConversionPatternRewriter &rewriter) const override;
-};
-
 } // namespace LoadStoreConverter
 #endif
-

@@ -58,4 +58,3 @@ public:
 };
 } // namespace FunctionConverter
 #endif
-

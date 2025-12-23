@@ -29,6 +29,7 @@
 #if __has_include("bishengir/Dialect/HIVM/IR/HIVM.h")
 #include "bishengir/Dialect/HIVM/IR/HIVM.h"
 #endif
+
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Utils/Utils.h"
@@ -300,15 +301,17 @@ void BlockData::divBlock(BlockData &lBlock, BlockData &rBlock, Location loc,
   assert(this->isEmpty() && lBlock.getRank() == rBlock.getRank());
 
   assert(!(lBlock.hasSource() && rBlock.hasSource()));
+  assert(lBlock.isScalar() && rBlock.isScalar());
 
-  for (const auto &[lOffset, rOffset] :
-       llvm::zip(lBlock.getOffsetsRef(), rBlock.getOffsetsRef())) {
-    this->offsets.push_back(divOpFoldResult(lOffset, rOffset, loc, rewriter));
+  auto rScalar = rBlock.getScalar();
+  this->scalar = divOpFoldResult(lBlock.getScalar(), rScalar, loc, rewriter);
+
+  for (auto lOffset : lBlock.getOffsetsRef()) {
+    this->offsets.push_back(divOpFoldResult(lOffset, rScalar, loc, rewriter));
   }
 
-  for (const auto &[lStride, rStride] :
-       llvm::zip(lBlock.getStridesRef(), rBlock.getStridesRef())) {
-    this->strides.push_back(divOpFoldResult(lStride, rStride, loc, rewriter));
+  for (auto lStride : lBlock.getStridesRef()) {
+    this->strides.push_back(divOpFoldResult(lStride, rScalar, loc, rewriter));
   }
 
   this->sizes = lBlock.getSizesRef();
@@ -477,6 +480,8 @@ void BlockDataParser::parse(
     parse(tensorCastOp.getSource(), data, loc, rewriter, known);
   } else if (auto fillOp = operand.getDefiningOp<linalg::FillOp>()) {
     parseFill(fillOp, data, loc, rewriter, known);
+  } else if (auto selectOp = operand.getDefiningOp<arith::SelectOp>()){
+    parseSelect(selectOp, data, loc, rewriter, known);
   } else {
     operand.dump();
     llvm_unreachable("encountered AddPtrOp produced by unsupported operation");
@@ -946,6 +951,44 @@ void BlockDataParser::parseFill(linalg::FillOp op, BlockData &data,
   }
 }
 
+void BlockDataParser::parseSelect(
+    arith::SelectOp op, BlockData &data, const Location &loc,
+    ConversionPatternRewriter &rewriter,
+    const llvm::SmallDenseMap<Value, BlockData> &known) {
+  assert(data.isEmpty());
+  auto res = op.getResult();
+  auto resType = dyn_cast<ShapedType>(op.getResult().getType());
+
+  assert(llvm::all_of(resType.getShape(), [](int64_t dim) { return dim == 1; }));
+  assert(isa<IntegerType>(resType.getElementType()) || 
+        isa<IndexType>(resType.getElementType()));
+
+  size_t loopLimit = resType.getShape().size();
+  SmallVector<Value> indices;
+
+  for (auto i = 0; i < loopLimit; i++) {
+    indices.push_back(rewriter.create<arith::ConstantIndexOp>(loc, 0));
+  }
+  auto extractOp = rewriter.create<tensor::ExtractOp>(loc, res, indices);
+  OpFoldResult IndexOfr = extractOp.getResult();
+  if (isa<IntegerType>(extractOp.getType())) { 
+    IndexOfr = getOpFoldResultOfLayoutInfo(extractOp.getResult(), rewriter);
+  }
+  // Set scalar for mul state
+  data.setScalar(IndexOfr);
+
+  for (auto i = 0; i < loopLimit; i++) {
+    // Add original dense val to first dim offset for add state
+    if (i == 0) {
+      data.getOffsetsRef().push_back(IndexOfr);
+    } else {
+      data.getOffsetsRef().push_back(rewriter.getIndexAttr(0));
+    }
+    data.getSizesRef().push_back(rewriter.getIndexAttr(resType.getShape()[i]));
+    data.getStridesRef().push_back(rewriter.getIndexAttr(0));
+  }
+}
+
 void BlockDataParser::rewriteAddPtr(
     triton::AddPtrOp op, triton::AddPtrOp::Adaptor &adaptor,
     ConversionPatternRewriter &rewriter,
@@ -989,17 +1032,19 @@ void BlockDataParser::rewriteAddPtr(
   // And here store the unmodified state into known ptrs, since any following
   // pointer arithmetic operations should still use the original 0 stride.
   auto inferedSize = 1;
+  auto hoistDim = op->getAttrOfType<IntegerAttr>("hoist_dim");
   for (int i = data.getSizesRef().size() - 1; i >= 0; i--) {
     auto strideConst = getConstantIntValue(data.getStridesRef()[i]);
     auto sizeConst = getConstantIntValue(data.getSizesRef()[i]);
     assert(sizeConst.has_value());
-    if (sizeConst.value() == 1 && strideConst && strideConst.value() == 0) {
+    bool shouldReplaceStride = (sizeConst.value() == 1) || (hoistDim && hoistDim.getValue() == i);
+    if (shouldReplaceStride && strideConst && strideConst.value() == 0) {
       data.getStridesRef()[i] = rewriter.getIndexAttr(inferedSize);
     }
     inferedSize *= sizeConst.value();
   }
 
-/*  if (auto intToPtrOp =
+  if (auto intToPtrOp =
           dyn_cast<triton::IntToPtrOp>(data.getSourceRef().getDefiningOp())) {
     auto rtype = cast<triton::PointerType>(intToPtrOp.getResult().getType());
     auto memrefType =
@@ -1007,17 +1052,6 @@ void BlockDataParser::rewriteAddPtr(
     auto hivmPointCastOp = rewriter.create<hivm::PointerCastOp>(
         intToPtrOp.getLoc(), memrefType, ValueRange{intToPtrOp.getSrc()});
     data.setSource(hivmPointCastOp.getResult());
-  }*/
-
-  if (data.getSourceRef().getDefiningOp()){
-  if (auto intToPtrOp =
-          dyn_cast<triton::IntToPtrOp>(data.getSourceRef().getDefiningOp())) {
-    auto rtype = cast<triton::PointerType>(intToPtrOp.getResult().getType());    auto memrefType =
-        MemRefType::get({ShapedType::kDynamic}, rtype.getPointeeType());
-    auto hivmPointCastOp = rewriter.create<hivm::PointerCastOp>(
-        intToPtrOp.getLoc(), memrefType, ValueRange{intToPtrOp.getSrc()});
-    data.setSource(hivmPointCastOp.getResult());
-  }
   }
 
   if (data.hasResElemTy()) {
@@ -1871,7 +1905,6 @@ void BlockDataParser::rewriteLoopOp(
     SmallVector<bool> maskIterArgsForAfter(whileOp->getNumResults());
     
     int64_t indexCnt = 0;
-    int64_t afterArgCnt = 0;
     
     for (auto newInitArg: newInitArgs) {
       usedForBeforeRegionArgs.push_back(newInitArg ? true:false);
@@ -1935,6 +1968,8 @@ void BlockDataParser::rewriteLoopOp(
     rewriteTerminator(conditionOp, rewriter, blockArgIdxSetForAfter, iterArgIdxMapForAfter, known);
   }
 
+  // Copy all attributes from op to newOp
+  newOp->setAttrs(op->getAttrs());
   rewriter.eraseOp(op);
 
   // Update the loop body. Manually invoke the rewrite logic on addptr and yield
@@ -1955,6 +1990,8 @@ void BlockDataParser::rewriteLoopOp(
                 loopOp && !loopOp->hasAttr("ExtractedLoadOrStore")) {
         ConversionPatternRewriter::InsertionGuard guard(rewriter);
         rewriter.setInsertionPoint(loopOp);
+        // Remove UnhandledLoopOp attr before process
+        loopOp->removeAttr("UnhandledLoopOp");
         rewriteLoopOp(loopOp, rewriter, known);
       }
     }
@@ -2048,4 +2085,3 @@ void BlockDataParser::rewriteAddPtrToUnstrucMemAcc(
 
 } // namespace triton
 } // namespace mlir
-

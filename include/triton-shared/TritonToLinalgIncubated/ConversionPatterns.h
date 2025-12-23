@@ -131,4 +131,3 @@ static std::optional<unsigned> getBitWidth(Type a) {
   return std::nullopt;
 }
 #endif // CONVERSIONPATTERNS_H
-

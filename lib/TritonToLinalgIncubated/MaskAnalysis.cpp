@@ -43,7 +43,7 @@ namespace mlir {
 
 namespace triton {
 
-namespace Incubated{	
+namespace Incubated {	
 
 LogicalResult MaskState::parse(Value operand, const Location &loc,
                                OpBuilder &builder) {
@@ -613,9 +613,8 @@ void MaskState::eraseInsertedOps(Operation *rawOp, PatternRewriter &rewriter) {
   }
 }
 
-}
+} // namespace Incubated
 
 } // namespace triton
 
 } // namespace mlir
-

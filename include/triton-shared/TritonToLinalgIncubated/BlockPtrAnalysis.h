@@ -246,6 +246,11 @@ public:
                         ConversionPatternRewriter &rewriter,
                         const llvm::SmallDenseMap<Value, BlockData> &known);
 
+  static void parseSelect(arith::SelectOp op, BlockData &data,
+                        const Location &loc,
+                        ConversionPatternRewriter &rewriter,
+                        const llvm::SmallDenseMap<Value, BlockData> &known);
+
   static void rewriteAddPtr(triton::AddPtrOp op,
                             triton::AddPtrOp::Adaptor &adaptor,
                             ConversionPatternRewriter &rewriter,
