@@ -119,6 +119,8 @@ BubbleUpExtract<ExtractOpTy>::matchAndRewrite(ExtractOpTy op,
     bubbleUpOperation(op, splatOp, loc, rewriter);
   } else if (auto makeRangeOp = dyn_cast<triton::MakeRangeOp>(parentOp)) {
     bubbleUpOperation(op, makeRangeOp, loc, rewriter);
+  } else if (auto addPtrOp = dyn_cast<triton::AddPtrOp>(parentOp)) {
+    bubbleUpOperation(op, addPtrOp, loc, rewriter);
   } else if (auto floorOp = dyn_cast<math::FloorOp>(parentOp)) {
     bubbleUpOperation(op, floorOp, loc, rewriter);
   } else if (auto ceilOp = dyn_cast<math::CeilOp>(parentOp)) {
@@ -359,6 +361,15 @@ void BubbleUpExtract<tensor::ExtractSliceOp>::bubbleUpOperation(
                                             resultType.getElementType(), idx);
   rewriter.replaceOpWithNewOp<triton::SplatOp>(op, op.getResult().getType(),
                                                idx);
+}
+
+template <typename ExtractOpTy>
+void BubbleUpExtract<ExtractOpTy>::bubbleUpOperation(
+    ExtractOpTy op, triton::AddPtrOp parentOp, Location loc,
+    PatternRewriter &rewriter) const {
+  auto ptr = createExtractOp(op, parentOp.getPtr(), loc, rewriter);
+  auto offset = createExtractOp(op, parentOp.getOffset(), loc, rewriter);
+  rewriter.replaceOpWithNewOp<triton::AddPtrOp>(op, ptr.getType(), ptr, offset);
 }
 
 template <typename ExtractOpTy>

@@ -9,6 +9,12 @@ def TritonToUnstructureIncubated : Pass<"triton-to-unstructure-incubated", "mlir
     let options = [
         Option<"forceScalarizeMode", "force-scalarize-mode", "bool", "false", 
            "Scalarize unstructured memory access even if structured dimensions are mixed.">,
+        Option<"compileOn91095", "compile-on-910-95", 
+            "bool", /*default*/"false",
+            "compile on 910_95">,
+        Option<"forceSimtTemplate", "force-simt-template", 
+            "bool", /*default*/"false",
+            "force to use simt template">
     ];
 }
 

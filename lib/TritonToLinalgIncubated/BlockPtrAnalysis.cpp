@@ -1044,7 +1044,7 @@ void BlockDataParser::rewriteAddPtr(
     inferedSize *= sizeConst.value();
   }
 
-  if (auto intToPtrOp =
+/* if (auto intToPtrOp =
           dyn_cast<triton::IntToPtrOp>(data.getSourceRef().getDefiningOp())) {
     auto rtype = cast<triton::PointerType>(intToPtrOp.getResult().getType());
     auto memrefType =
@@ -1052,6 +1052,19 @@ void BlockDataParser::rewriteAddPtr(
     auto hivmPointCastOp = rewriter.create<hivm::PointerCastOp>(
         intToPtrOp.getLoc(), memrefType, ValueRange{intToPtrOp.getSrc()});
     data.setSource(hivmPointCastOp.getResult());
+  }*/
+
+// this modify is for null data.getSourceRef().getDefiningOp()
+  if (data.getSourceRef().getDefiningOp()) {
+    if (auto intToPtrOp =
+        dyn_cast<triton::IntToPtrOp>(data.getSourceRef().getDefiningOp())) {
+      auto rtype = cast<triton::PointerType>(intToPtrOp.getResult().getType());
+      auto memrefType =
+        MemRefType::get({ShapedType::kDynamic}, rtype.getPointeeType());
+      auto hivmPointCastOp = rewriter.create<hivm::PointerCastOp>(
+          intToPtrOp.getLoc(), memrefType, ValueRange{intToPtrOp.getSrc()});
+      data.setSource(hivmPointCastOp.getResult());
+    }
   }
 
   if (data.hasResElemTy()) {

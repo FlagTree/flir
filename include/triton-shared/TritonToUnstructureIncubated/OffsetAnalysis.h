@@ -87,6 +87,8 @@ public:
 
   Value getPtr() const;
   Value getOffset() const;
+  SmallVector<Value> getOffsets() const;
+  SmallVector<Value> &getOffsetsRef();
   bool isScalarLike() const;
   SmallVector<bool> &getStructuredRef();
   const SmallVector<bool> &getStructured() const;
@@ -94,6 +96,7 @@ public:
 
   void setPtr(const Value &ptr);
   void setOffset(const Value &offset);
+  void setOffsets(ValueRange offsets);
   void setStructured();
   void setStructured(int rank);
   void setUnstructured();
@@ -110,6 +113,7 @@ public:
 private:
   Value ptr;
   Value offset;
+  SmallVector<Value> tptOffsets;
 
   bool scalarLike = false;
 
