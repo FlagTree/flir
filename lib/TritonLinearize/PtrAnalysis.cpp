@@ -42,10 +42,10 @@
 #include <string>
 
 //#include "TritonLinearize/MaskAnalysis.h"
+#include "triton-shared/Analysis/MaskAnalysis.h"
 #include "TritonLinearize/PtrAnalysis.h"
 //#include "TritonLinearize/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
-#include "triton-shared/Analysis/MaskAnalysis.h"
 #include "Utils/Utils.h"
 
 #define DEBUG_TYPE "triton-linearize-ptr-analysis"
@@ -308,9 +308,7 @@ bool PtrState::dimHasModulo(uint32_t dim) const {
 
 bool PtrState::isBlockPtr() const { return !order.empty(); }
 
-LogicalResult PtrState::broadcastIfNeeded(SmallVector<StateInfo> &infoPerDim,
-                                          Operation *op, OpBuilder &builder) {
-    auto loc = op->getLoc();
+LogicalResult PtrState::broadcastIfNeeded(SmallVector<StateInfo> &infoPerDim, OpBuilder &builder) {
     auto defaultAttr = builder.getIndexAttr(0);
     auto staticSize = getIntAttr(this->sizes[infoPerDim[0].dim]);
     assert(staticSize.has_value() && "do not support dynamic size");
@@ -346,21 +344,45 @@ LogicalResult PtrState::broadcastIfNeeded(SmallVector<StateInfo> &infoPerDim,
 bool PtrState::countDims() {
   // initialize
   dimLenth = SmallVector<size_t>();
+  auto dimLenthInDimOrder = SmallVector<size_t>();
+  // Ensure dimLenth has size sizes.size() + 1
+  while (dimLenth.size() < sizes.size() + 1) {
+    dimLenth.push_back(0);
+    dimLenthInDimOrder.push_back(0);
+  }
+
+  // Count the numbers of info in each dimension
+  for (const auto &info : stateInfo) {
+    unsigned dim = info.dim;
+    ++dimLenthInDimOrder[dim];
+  }
 
   // Use a map to track the first occurrence of each dimension
   llvm::DenseMap<unsigned, unsigned> dimToIndex;
+  unsigned insert_pos = 0;
   for (const auto& info : stateInfo) {
     unsigned dim = info.dim;
-
+    while (insert_pos < dimLenthInDimOrder.size() && dimLenthInDimOrder[insert_pos] == 0) {
+      ++insert_pos;
+    }
     if (dimToIndex.count(dim)) {
-      // Dimension has been seen before, increment its count
       ++dimLenth[dimToIndex[dim]];
     } else {
-      // First occurrence of this dim, append to dimLenth and record its position
-      dimToIndex[dim] = dimLenth.size();
-      dimLenth.push_back(1);
-    }
+      // Record the first occurrence of this dimension
+      dimToIndex[dim] = insert_pos;
+      if (insert_pos >= dimLenth.size()) {
+        // This should not happen if the input data is valid
+        break;
+      }
+      dimLenth[dimToIndex[dim]] = 1;
+      ++insert_pos;
   }
+  }
+
+  // Ensure dimLenth has size sizes.size() + 1
+  while (dimLenth.size() < sizes.size() + 1) {
+    dimLenth.push_back(0);
+    }
 
   // Ensure dimLenth has size sizes.size() + 1
   while (dimLenth.size() < sizes.size() + 1) {
@@ -459,7 +481,7 @@ LogicalResult PtrState::ExpandInfo(SmallVector<StateInfo> &infoPerDim,
     infoPerDim.insert(infoPerDim.begin() + insertPos[i] + i, insertInfo[i]);
   }
 
-  if(this->broadcastIfNeeded(infoPerDim, op, builder).failed()){
+  if(this->broadcastIfNeeded(infoPerDim, builder).failed()){
     return failure();
   }
   return success();
@@ -767,6 +789,18 @@ LogicalResult PtrState::addState(const PtrState &lhsState,
                                                     loc, builder);
         StateInfo newStateInfo(newOffset, newStride, lhsState.stateInfo[lhsId].shape, 
                                 lhsState.stateInfo[lhsId].mask, lhsState.stateInfo[lhsId].dim);
+        // Synchronize dimOffset when adding two StateInfo
+        // dimOffset should reflect the same addition operation as offset
+        if (lhsState.stateInfo[lhsId].dimOffset && rhsState.stateInfo[i].dimOffset) {
+          newStateInfo.dimOffset = addOFRs(lhsState.stateInfo[lhsId].dimOffset,
+                                           rhsState.stateInfo[i].dimOffset, loc, builder);
+        } else if (lhsState.stateInfo[lhsId].dimOffset) {
+          newStateInfo.dimOffset = addOFRs(lhsState.stateInfo[lhsId].dimOffset,
+                                           rhsState.stateInfo[i].offset, loc, builder);
+        } else if (rhsState.stateInfo[i].dimOffset) {
+          newStateInfo.dimOffset = addOFRs(lhsState.stateInfo[lhsId].offset,
+                                           rhsState.stateInfo[i].dimOffset, loc, builder);
+        }
         this->stateInfo.push_back(newStateInfo);
         dimIndex.erase(dimId);
       } else {
@@ -1117,7 +1151,6 @@ LogicalResult PtrAnalysis::visitOperandRem(arith::RemSIOp remOp,
 
   auto staticShape = cast<IntegerAttr>(remsiop.getValue()).getInt();
   for(auto &info : state.stateInfo){
-    auto staticSize = getIntAttr(state.sizes[info.dim]);
     auto staticStride = getIntAttr(info.stride);
     auto preShape = getIntAttr(info.shape);
     auto staticMask = getIntAttr(info.mask);
@@ -1574,6 +1607,7 @@ triton::AddPtrOp PtrState::createAddPtrOp(OpBuilder &builder, Location loc){
   SmallVector<OpFoldResult> tensorStrides;
   SmallVector<OpFoldResult> tensorOffsets;
   SmallVector<OpFoldResult> tensorShape; // compare mode: only 0/1
+  SmallVector<OpFoldResult> tensorDimOffset; // use for dimVar
   
   auto ptrType = cast<triton::PointerType>(source.getType());
   LLVM_DEBUG({llvm::dbgs() << "before createAddptr dump ptrState:\n";});
@@ -1603,7 +1637,8 @@ triton::AddPtrOp PtrState::createAddPtrOp(OpBuilder &builder, Location loc){
     }
     tensorShape.push_back(builder.getIndexAttr(0)); // after this, tensorShape express maskmode <|>
     tensorStrides.push_back(info.stride);
-    tensorOffsets.push_back(info.dimOffset?info.dimOffset:info.offset);
+    tensorOffsets.push_back(info.offset);
+    tensorDimOffset.push_back(info.dimOffset?info.dimOffset:info.offset);
   }
 
   if(this->scalar){ // isa pure scalar || isa splated scalar 
@@ -1614,12 +1649,14 @@ triton::AddPtrOp PtrState::createAddPtrOp(OpBuilder &builder, Location loc){
         tensorShape.push_back(builder.getIndexAttr(0));
         tensorStrides.push_back(builder.getIndexAttr(1));
         i?tensorOffsets.push_back(builder.getIndexAttr(0)):tensorOffsets.push_back(this->scalar);
+        i?tensorDimOffset.push_back(builder.getIndexAttr(0)):tensorDimOffset.push_back(this->scalar);
       }
     } else { //pure scalar
       tensorSizes.push_back(1);
       tensorShape.push_back(builder.getIndexAttr(0));
       tensorStrides.push_back(builder.getIndexAttr(1));
       tensorOffsets.push_back(this->scalar);
+      tensorDimOffset.push_back(this->scalar);
     }
   }
 
@@ -1634,35 +1671,39 @@ triton::AddPtrOp PtrState::createAddPtrOp(OpBuilder &builder, Location loc){
   for (int i = 0; i < dims; i++){
     auto size = tensorSizes[i];
     auto offset = tensorOffsets[i];
+    auto dimOffset = tensorDimOffset[i];
     // fixme, kaixin, type is not good to set as I32 .
     auto indexI32RowType = RankedTensorType::get({size}, builder.getI32Type());
     auto splatType = RankedTensorType::get({size}, builder.getI32Type());  
     // make range
     Value range = builder.create<triton::MakeRangeOp>(loc, indexI32RowType, 0, size);
     
-    // add offset
-    //Value offsetValue = mlir::materializeValue(builder, loc, offset);
-    Value offsetValue = materializeValue( builder, loc, offset );    
-    if (offsetValue.getType().isIndex()) {
-        offsetValue = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), offsetValue );
-    }
-    Value splatOffset = builder.create<triton::SplatOp>(loc, splatType, offsetValue);
-    auto addValue = builder.create<arith::AddIOp>(loc, splatOffset, range);
-    stateInfo[i].dimVar = addValue ;
-
-    // multiply stride 
-    // fixme, kaixin, need to use i64
-   // Value strideValue = mlir::materializeValue(builder, loc, tensorStrides[i]);
     Value strideValue = materializeValue( builder, loc, tensorStrides[i] );
     if (strideValue.getType().isIndex()) {
         strideValue = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), strideValue );
     }
     Value splatStride = builder.create<triton::SplatOp>(loc, splatType, strideValue);
-    auto mulValue = builder.create<arith::MulIOp>(loc, addValue, splatStride);
+    auto mulValue = builder.create<arith::MulIOp>(loc, range, splatStride);
+    
+    // add offset
+    Value offsetValue = materializeValue(builder, loc, offset);
+    if (offsetValue.getType().isIndex()) {
+        offsetValue = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), offsetValue);
+    }
+    Value dimOffsetValue = materializeValue(builder, loc, dimOffset);
+    if (dimOffsetValue.getType().isIndex()) {
+        dimOffsetValue = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), dimOffsetValue);
+    }
+    Value splatOffset = builder.create<triton::SplatOp>(loc, splatType, offsetValue);
+    Value splatDimOffset = builder.create<triton::SplatOp>(loc, splatType, dimOffsetValue);
+
+    auto addValue = builder.create<arith::AddIOp>(loc, splatOffset, mulValue);
+    auto addDimValue = builder.create<arith::AddIOp>(loc, splatDimOffset, range);
+    stateInfo[i].dimVar = addDimValue;
 
     
     // expand dim
-    Value expandedValue = mulValue; 
+    Value expandedValue = addValue;
     for (int j = 0; j < dims; ++j) {
       if (j == i)
         continue;
@@ -1704,14 +1745,26 @@ LogicalResult PtrAnalysis::rewriteAddptrOp(triton::AddPtrOp op) {
 
   knownPtrs[op.getResult()] = state;
 
-  if(state.sizes.empty() && !(state.source && state.scalar)){
-    op->emitError("After addptr, state is empty or missing source/scalar.");
-    return failure();
+  if (state.scalar && state.stateInfo.empty()) {
+    PtrState newState;
+    newState.source = op.getResult();  
+    newState.scalar = Value();
+    newState.sizes = state.sizes;
+    newState.memAccTy = state.memAccTy;
+    newState.ptrIsTensor = state.ptrIsTensor;
+
+    knownPtrs[op.getResult()] = newState;
+    return success();
   }
 
   if (state.memAccTy.isUnstructured() || state.memAccTy.isFallback()) {
     LLVM_DEBUG({ llvm::dbgs() << "do nothing for indirect loading"<< "\n"; });
     return success();
+  }
+
+  if(state.sizes.empty() && !(state.source && state.scalar)){
+    op->emitError("After addptr, state is empty or missing source/scalar.");
+    return failure();
   }
 
   // analyze whether permute is needed 
@@ -1816,10 +1869,13 @@ PtrState PtrAnalysis::reconcileLoopPtrState(
   PtrState newState = state;
   int cnt = iterArgIndex + 1;
   if (newState.getRank() == 0) {
-    assert(newState.scalar);
-    // for scalar pointers, the scalar contains the offset and is the only
-    // relevant newState that could be updated by the loop.
-    newState.scalar = getReplacementVal(forOp, cnt);
+    if (newState.scalar) {
+      // for scalar pointers, the scalar contains the offset and is the only
+      // relevant newState that could be updated by the loop.
+      newState.scalar = getReplacementVal(forOp, cnt);
+    }
+    // else: pure pointer with all offsets materialized in source (from immediate
+    // scalar materialization), no update needed
   } else {
     for (auto &info : newState.stateInfo) {
       info.offset = getReplacementVal(forOp, cnt++);
@@ -1916,8 +1972,11 @@ PtrState PtrAnalysis::reconcileWhilePtrState(
   int cnt = argIndex + 1;
   
   if (newState.getRank() == 0) {
-    assert(newState.scalar && "Scalar pointer must have scalar field");
-    newState.scalar = getReplacementVal(whileOp, cnt);
+    if (newState.scalar) {
+      newState.scalar = getReplacementVal(whileOp, cnt);
+    }
+    // else: pure pointer with all offsets materialized in source (from immediate
+    // scalar materialization), no update needed
   } else {
     for (auto &info : newState.stateInfo) {
       info.offset = getReplacementVal(whileOp, cnt++);
@@ -2126,9 +2185,8 @@ PtrAnalysis::rewriteGetStructuredStateOp(tts::GetStructuredStateOp op) {
     if (state.scalar) {
       replacements.push_back(state.scalar);
     } else {
-      // This operand is a pointer directly from the kernel arguments.
-      // Use offset 0.
-      assert(!tritonValue.getDefiningOp());
+      // Pure pointer with all offsets materialized in source (from immediate
+      // scalar materialization or kernel arguments). Use offset 0.
       replacements.push_back(builder.create<arith::ConstantOp>(
           op.getLoc(), builder.getIndexAttr(0)));
     }
@@ -2252,7 +2310,14 @@ PtrAnalysis::rewriteYieldOp(scf::YieldOp op,
     }
 
     if (state.getRank() == 0) {
-      operands.push_back(state.scalar);
+      if (state.scalar) {
+        operands.push_back(state.scalar);
+      } else {
+        // Pure pointer with all offsets materialized in source, use offset 0
+        auto constOp = builder.create<arith::ConstantOp>(
+            op.getLoc(), builder.getIndexAttr(0));
+        operands.push_back(constOp.getResult());
+      }
     }
   }
 
@@ -3104,7 +3169,6 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
       LLVM_DEBUG({
         llvm::dbgs() << "Reshape store mask before store op\n";
       });
-      // do not reshape mask when permute exists, because mask will be permuted later
       auto targetMaskShapeType = RankedTensorType::get(storeShape, cast<ShapedType>(mask.getType()).getElementType());
       mask = builder.create<tensor::ReshapeOp>(loc, targetMaskShapeType, mask, targetShape);
     }
@@ -3597,4 +3661,3 @@ void PtrState::setMemAccVal(const MemAccVal v) { this->memAccTy.value = v; }
 
 } // namespace tts
 } // namespace mlir
-
