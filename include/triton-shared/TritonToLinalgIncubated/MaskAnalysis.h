@@ -36,9 +36,8 @@ namespace mlir {
 class OpBuilder;
 
 namespace triton {
-
-namespace Incubated{	
 // use to decode the pattern in a mask used for load and store
+namespace Incubated {	
 
 class MaskState {
 public:
@@ -140,7 +139,7 @@ private:
                                 const Location &loc, OpBuilder &builder);
 };
 
-}
+} // namespace Incubated
 
 } // namespace triton
 

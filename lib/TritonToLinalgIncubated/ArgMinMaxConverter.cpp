@@ -99,4 +99,3 @@ float ArgMaxConverter::getBaseReductionValue() {
 int8_t ArgMaxConverter::getBaseReductionIntValue() { return -128; }
 
 } // namespace TTOpConverters
-

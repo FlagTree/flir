@@ -28,18 +28,28 @@
 
 #include "mlir/IR/PatternMatch.h"
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DECL_DISCRETEMASKACCESSCONVERSION
 #if 0
 #include "ascend/triton-adapter/include/DiscreteMaskAccessConversion/Passes.h.inc"
 #else
 #include "triton-shared/DiscreteMaskAccessConversion/Passes.h.inc"
 #endif
-//#include "../../include/DiscreteMaskAccessConversion/Passes.h.inc"
+
+#define GEN_PASS_DEF_DISCRETEMASKACCESSCONVERSION
+#if 0
+#include "ascend/triton-adapter/include/DiscreteMaskAccessConversion/Passes.h.inc"
+#else
+#include "triton-shared/DiscreteMaskAccessConversion/Passes.h.inc"
+#endif
+
+extern bool compileOn91095Flag;
+extern bool forceSimtTemplateFlag;
 
 namespace mlir {
 namespace triton {
 
-std::unique_ptr<OperationPass<ModuleOp>> createDiscreteMaskAccessConversionPass();
+std::unique_ptr<OperationPass<ModuleOp>> 
+createDiscreteMaskAccessConversionPass(const DiscreteMaskAccessConversionOptions &options = {});
 
 } // namespace triton
 } // namespace mlir
@@ -50,8 +60,9 @@ using namespace mlir;
 using namespace triton;
 
 class DiscreteMaskAccessConversionPass
-    : public DiscreteMaskAccessConversionBase<DiscreteMaskAccessConversionPass> {
+    : public ::impl::DiscreteMaskAccessConversionBase<DiscreteMaskAccessConversionPass> {
 public:
+  explicit DiscreteMaskAccessConversionPass(const DiscreteMaskAccessConversionOptions &options);
 
   void runOnOperation() override;
 };

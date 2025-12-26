@@ -35,6 +35,7 @@
 #if __has_include("bishengir/Dialect/Annotation/IR/Annotation.h")
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"
 #endif
+
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Utils/Utils.h"
@@ -87,11 +88,11 @@ AddPtrConverter::matchAndRewrite(triton::AddPtrOp op, OpAdaptor adaptor,
 }
 
 LogicalResult LoadConverter::toTensorAndReplace(
-    triton::LoadOp &op, RankedTensorType &tensorType, memref::AllocOp &allocOp,
+    triton::LoadOp &op, RankedTensorType &tensorType, Value localMem,
     bool mayImplicitTransposeWithLastAxis, const Location &loc, ConversionPatternRewriter &rewriter) const {
   
   Value loadedTensor = rewriter.create<bufferization::ToTensorOp>(
-      loc, tensorType, allocOp, true, true);
+      loc, tensorType, localMem, true, true);
   if(mayImplicitTransposeWithLastAxis){
     auto markOp = rewriter.create<annotation::MarkOp>(loc, loadedTensor);
     markOp->setAttr(MayImplicitTransposeWithLastAxisTAG, UnitAttr::get(rewriter.getContext()));
@@ -169,10 +170,10 @@ LogicalResult LoadConverter::continueModifyFromAddPtrConverter(
 }
 
 void LoadConverter::fillTensorWithOtherForMaskScenario(
-    Value other, memref::AllocOp localMem, ArrayRef<OpFoldResult> maskDim,
+    Value other, Value localMem, ArrayRef<OpFoldResult> maskDim,
     ConversionPatternRewriter &rewriter) const {
-  auto loc = localMem->getLoc();
-  MemRefType originalType = localMem.getType();
+  auto loc = localMem.getLoc();
+  MemRefType originalType = cast<MemRefType>(localMem.getType());
   assert(originalType.hasStaticShape() && "only support static shape");
   assert(originalType.getRank() == maskDim.size() &&
          "shape and mask must have same rank");
@@ -199,13 +200,17 @@ void LoadConverter::fillTensorWithOtherForMaskScenario(
     fillFlag = rewriter.create<arith::OrIOp>(loc, fillFlag, curCmp.getResult())
                    .getResult();
   }
-
-  rewriter.create<scf::IfOp>(
-      loc, fillFlag, [&](OpBuilder &builder, Location loc) {
-        builder.create<linalg::FillOp>(loc, ValueRange{other},
+  auto ifOp = rewriter.create<scf::IfOp>(loc, fillFlag);
+  {
+    OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(&ifOp.getThenRegion().front());
+    rewriter.create<linalg::FillOp>(loc, ValueRange{other},
                                        ValueRange{localMem});
-        builder.create<scf::YieldOp>(loc);
-      });
+  }
+  ifOp->setAttr(
+    rewriter.getStringAttr("hivm.unlikely_condition"),
+    UnitAttr::get(rewriter.getContext())
+  );
 }
 
 LoadConverter::LoadConverter(MLIRContext *context)
@@ -280,8 +285,47 @@ LoadConverter::matchAndRewrite(triton::LoadOp op, OpAdaptor adaptor,
   auto memRefShape = memRefType.getShape();
   auto memRefElementType = memRefType.getElementType();
 
-  auto allocOp = rewriter.create<memref::AllocOp>(
-      loc, MemRefType::get(memRefShape, memRefElementType));
+  Value allocOp;
+  if (op->hasAttr(ConverterUtils::discreteAttrName)) {
+    Operation *loop = op->getParentOp();
+    for (auto parentOp = loop->getParentOp();
+         parentOp->hasAttr("ExtractedLoadOrStore");
+         parentOp = parentOp->getParentOp())
+      loop = parentOp;
+    rewriter.setInsertionPoint(loop);
+    auto loopOp = cast<scf::ForOp>(loop);
+    auto fullMemRefShape =
+        cast<RankedTensorType>(loopOp.getInitArgs()[0].getType()).getShape();
+    auto fullMemRefType = MemRefType::get(fullMemRefShape, memRefElementType);
+    if (fullMemRefShape.size() == 2u)
+      loopOp->setAttr("hivm.parallel_loop", rewriter.getUnitAttr());
+    allocOp = rewriter.create<memref::AllocOp>(loc, fullMemRefType);
+    rewriter.setInsertionPointAfter(loop);
+    auto toTensorOp = rewriter.create<bufferization::ToTensorOp>(
+        loc, RankedTensorType::get(fullMemRefShape, memRefElementType), allocOp, true, true);
+    rewriter.replaceAllUsesWith(loopOp->getResult(0), toTensorOp->getResult(0));
+    tensor::InsertSliceOp insertSliceOp = nullptr;
+    for (auto *user : op->getUsers()) {
+      if (auto targetOp = dyn_cast<tensor::InsertSliceOp>(user)) {
+        insertSliceOp = targetOp;
+        break;
+      }
+    }
+    auto offsets = insertSliceOp.getMixedOffsets();
+    auto sizes = insertSliceOp.getMixedSizes();
+    auto strides = insertSliceOp.getMixedStrides();
+    auto allocType = memref::SubViewOp::inferResultType(fullMemRefType, offsets,
+                                                        sizes, strides);
+    rewriter.setInsertionPoint(op);
+    allocOp = rewriter.create<memref::SubViewOp>(
+        loc, cast<MemRefType>(allocType), allocOp, offsets, sizes, strides);
+    rewriter.replaceAllUsesExcept(insertSliceOp.getResult(),
+                                  insertSliceOp.getDest(), insertSliceOp);
+    rewriter.eraseOp(insertSliceOp);
+  } else {
+    allocOp = rewriter.create<memref::AllocOp>(
+        loc, MemRefType::get(memRefShape, memRefElementType));
+  }
 
   auto tensorType = RankedTensorType::get(memRefShape, memRefElementType);
   // boundary check
@@ -333,7 +377,7 @@ LoadConverter::matchAndRewrite(triton::LoadOp op, OpAdaptor adaptor,
       auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
 #else //triton_v3.3.x
       auto [ptrStrides, ptrOffsets] = memRefType.getStridesAndOffset();
-#endif
+#endif  
       if (ptrStrides.back() == 2 && (memRefShape.back() % 2 == 0) &&
           mlir::triton::DeinterleaveStatusOptimization(op, adaptor, rewriter)
               .succeeded()) {
@@ -377,7 +421,7 @@ LoadConverter::matchAndRewrite(triton::LoadOp op, OpAdaptor adaptor,
       isConstantIntValue(mstate.offsets.back(), 0) &&
       isConstantIntValue(mstate.dims.back(), memRefType.getShape().back())) {
 #if LLVM_VERSION_MAJOR < 21
-     auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
+    auto [ptrStrides, ptrOffsets] = getStridesAndOffset(memRefType);
 #else //triton_v3.3.x
      auto [ptrStrides, ptrOffsets] = memRefType.getStridesAndOffset();
 #endif
@@ -463,10 +507,6 @@ AtomicRMWConverter::matchAndRewrite(triton::AtomicRMWOp op, OpAdaptor adaptor,
   }
 
   auto rmwOp = op.getAtomicRmwOp();
-  if (rmwOp == triton::RMWOp::UMAX || rmwOp == triton::RMWOp::UMIN) {
-    return rewriter.notifyMatchFailure(
-        op, "AtomicRMWConverter: unsupported atomic kind for now");
-  }
 
   // 1. Simple case where no mask is used.
   auto type = dyn_cast<MemRefType>(ptr.getType());
@@ -1025,305 +1065,4 @@ StoreConverter::matchAndRewrite(triton::StoreOp op, OpAdaptor adaptor,
   return success();
 }
 
-/*GatherLoadConverter::GatherLoadConverter(MLIRContext *context)
-    : OpConversionPattern<triton::GatherLoadOp>(context) {}
-
-LogicalResult
-GatherLoadConverter::matchAndRewrite(triton::GatherLoadOp op, OpAdaptor adaptor,
-                                    ConversionPatternRewriter &rewriter) const {
-  auto loc = op.getLoc();
-  // Get converted operands
-  Value src = adaptor.getSrc();
-  Value gatherIndices = adaptor.getGatherIndices();
-  auto srcShapeVals = adaptor.getSrcShape();
-  auto srcOffsetVals = adaptor.getSrcOffset();
-  auto readShapeAttr = op.getReadShape();
-  int32_t gatherDim = op.getGatherDim();
-  
-  ///////////////////////////
-  // Get result type
-  auto resultTensorType = cast<RankedTensorType>(op.getResult().getType());
-  auto elemType = resultTensorType.getElementType();
-  auto resultShape = resultTensorType.getShape();
-  
-  // Convert src (tt.ptr -> memref) to the correct memref shape
-  // src is now memref<?xT> after type conversion, need to reinterpret to full shape
-  auto srcMemRefType = cast<MemRefType>(src.getType());
-  
-  // Build multi-dimensional memref type
-  SmallVector<int64_t> fullSrcShape;
-  for (auto shapeVal : srcShapeVals) {
-    if (auto constOp = shapeVal.getDefiningOp<arith::ConstantIndexOp>()) {
-      fullSrcShape.push_back(constOp.value());
-    } else {
-      fullSrcShape.push_back(ShapedType::kDynamic);
-    }
-  }
-  auto fullSrcMemRefType = MemRefType::get(fullSrcShape, elemType);
-  
-  // Reinterpret cast from 1D to multi-dimensional
-  // Build strides: stride[i] = product of all dimensions after i
-  SmallVector<OpFoldResult> sizes, strides; // offsets are 0
-  
-  // Calculate strides from right to left (row-major layout)
-  SmallVector<Value> stridesList;
-  Value currentStride = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-  
-  for (int i = fullSrcShape.size() - 1; i >= 0; --i) {
-    stridesList.insert(stridesList.begin(), currentStride);
-    
-    // Update stride for next dimension: stride *= size[i]
-    if (i > 0) {  // Don't need to calculate for the first dimension
-      if (fullSrcShape[i] != ShapedType::kDynamic) {
-        // Static dimension: multiply by constant
-        currentStride = rewriter.create<arith::MulIOp>(
-            loc, currentStride,
-            rewriter.create<arith::ConstantIndexOp>(loc, fullSrcShape[i]));
-      } else {
-        // Dynamic dimension: multiply by runtime value
-        Value dimSize = srcShapeVals[i];
-        if (!dimSize.getType().isIndex()) {
-          dimSize = rewriter.create<arith::IndexCastOp>(
-              loc, rewriter.getIndexType(), dimSize);
-        }
-        currentStride = rewriter.create<arith::MulIOp>(loc, currentStride, dimSize);
-      }
-    }
-  }
-  
-  // Build offsets, sizes, and strides for ReinterpretCastOp
-  for (size_t i = 0; i < srcShapeVals.size(); ++i) {
-    // Convert Value to OpFoldResult for sizes
-    Value sizeVal = srcShapeVals[i];
-    if (!sizeVal.getType().isIndex()) {
-      sizeVal = rewriter.create<arith::IndexCastOp>(
-          loc, rewriter.getIndexType(), sizeVal);
-    }
-    sizes.push_back(sizeVal);
-    
-    // Convert Value to OpFoldResult for strides
-    strides.push_back(stridesList[i]);
-  }
-
-  OpFoldResult offset = rewriter.getIndexAttr(0);
-  
-  // Use the correct builder method for ReinterpretCastOp
-  auto srcMemRef = rewriter.create<memref::ReinterpretCastOp>(
-      loc, fullSrcMemRefType, src, offset, sizes, strides);
-  
-  // Allocate output buffer
-  auto resultMemRefType = MemRefType::get(resultShape, elemType);
-  auto outputBuffer = rewriter.create<memref::AllocOp>(loc, resultMemRefType);
-  
-  // Get indices tensor type for extracting
-  auto indicesTensorType = cast<RankedTensorType>(gatherIndices.getType());
-  int64_t numIndices = indicesTensorType.getShape()[0];
-  
-  // Create for loop
-  auto zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-  auto numIndicesVal = rewriter.create<arith::ConstantIndexOp>(loc, numIndices);
-  auto stepOne = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-  auto forOp = rewriter.create<scf::ForOp>(loc, zeroIdx, numIndicesVal, stepOne);
-  
-  // Mark as parallel loop
-  forOp->setAttr("hivm.parallel_loop", rewriter.getUnitAttr());
-  
-  // Build loop body
-  Block *loopBody = forOp.getBody();
-  auto savedInsertionPoint = rewriter.saveInsertionPoint();
-  rewriter.setInsertionPointToStart(loopBody);
-  
-  // Remove the terminator temporarily
-  Operation *terminator = &loopBody->back();
-  rewriter.setInsertionPoint(terminator);
-  
-  Value iv = forOp.getInductionVar();
-  
-  // Extract gather index from indices tensor
-  Value gatherIdx = rewriter.create<tensor::ExtractOp>(loc, gatherIndices, ValueRange{iv});
-  Value gatherIdxAsIndex = rewriter.create<arith::IndexCastOp>(
-      loc, rewriter.getIndexType(), gatherIdx);
-  
-  // Build source subview offsets/sizes/strides
-  SmallVector<OpFoldResult> srcSubviewOffsets, srcSubviewSizes, srcSubviewStrides;
-  // DenseI32ArrayAttr can be implicitly converted to ArrayRef<int32_t>
-  ArrayRef<int32_t> readShape = readShapeAttr;
-  
-  for (size_t i = 0; i < srcOffsetVals.size(); ++i) {
-    if (i == static_cast<size_t>(gatherDim)) {
-      // Use the gathered index for gather dimension
-      srcSubviewOffsets.push_back(gatherIdxAsIndex);
-      srcSubviewSizes.push_back(rewriter.getIndexAttr(1));
-    } else {
-      // Use provided offset and read size for other dimensions
-      Value offsetVal = srcOffsetVals[i];
-      if (!offsetVal.getType().isIndex()) {
-        offsetVal = rewriter.create<arith::IndexCastOp>(
-            loc, rewriter.getIndexType(), offsetVal);
-      }
-      srcSubviewOffsets.push_back(offsetVal);
-      srcSubviewSizes.push_back(rewriter.getIndexAttr(readShape[i]));
-    }
-    srcSubviewStrides.push_back(rewriter.getIndexAttr(1));
-  }
-  
-  auto srcSubview = rewriter.create<memref::SubViewOp>(
-      loc, srcMemRef, srcSubviewOffsets, srcSubviewSizes, srcSubviewStrides);
-  
-  // Build destination subview
-  SmallVector<OpFoldResult> dstSubviewOffsets, dstSubviewSizes, dstSubviewStrides;
-  for (size_t i = 0; i < resultShape.size(); ++i) {
-    if (i == static_cast<size_t>(gatherDim)) {
-      dstSubviewOffsets.push_back(iv);
-      dstSubviewSizes.push_back(rewriter.getIndexAttr(1));
-    } else {
-      dstSubviewOffsets.push_back(rewriter.getIndexAttr(0));
-      dstSubviewSizes.push_back(rewriter.getIndexAttr(readShape[i]));
-    }
-    dstSubviewStrides.push_back(rewriter.getIndexAttr(1));
-  }
-  
-  auto dstSubview = rewriter.create<memref::SubViewOp>(
-      loc, outputBuffer, dstSubviewOffsets, dstSubviewSizes, dstSubviewStrides);
-
-  // Check if gather is on the trailing axis (last dimension)
-  if (static_cast<size_t>(gatherDim) == fullSrcShape.size() - 1) {
-    // For gather on the trailing axis, mark as discrete memory access
-    // This degrades to scalar read/write handling to avoid alignment issues
-    auto copyOp = rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
-    copyOp->setAttr(ConverterUtils::discreteAttrName,
-                    rewriter.getUnitAttr());
-  } else {
-    // For gather on non-trailing axes, add stride alignment annotation
-    // This tells the backend to handle address alignment for DMA operations
-    auto dstMarkOp = rewriter.create<annotation::MarkOp>(loc, dstSubview);
-    dstMarkOp->setAttr("hfusion.stride_align_dims",
-                       rewriter.getDenseI32ArrayAttr({static_cast<int32_t>(gatherDim)}));
-    dstMarkOp->setAttr("hfusion.stride_align_value_in_byte",
-                       rewriter.getDenseI32ArrayAttr({32}));
-    
-    // Copy from source to destination
-    rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
-  }
-  
-  // Restore insertion point
-  rewriter.restoreInsertionPoint(savedInsertionPoint);
-  
-  // Convert memref to tensor
-  auto resultTensor = rewriter.create<bufferization::ToTensorOp>(*/
-    //  loc, resultTensorType, outputBuffer, /*restrict=*/true, /*writable=*/true);
-  
-  // Mark as gather_load
-  //resultTensor->setAttr("gather_load", rewriter.getUnitAttr());
-  
-  //Replace the original op
- // rewriter.replaceOp(op, resultTensor);
-  
-//  return success();
-
-GatherLoadConverter::GatherLoadConverter(MLIRContext *context)
-    : OpConversionPattern<triton::GatherOp>(context) {}
-
-    LogicalResult LoadStoreConverter::GatherLoadConverter::matchAndRewrite(triton::GatherOp op,
-                               typename triton::GatherOp::Adaptor adaptor,
-                               ConversionPatternRewriter &rewriter)   const
-{
-    auto loc = op.getLoc();
-
-    // 1. 获取输入 tensor / indices / axis
-    Value src = op.getSrc();
-    Value gatherIndices = op.getIndices();
-    int32_t gatherDim = op.getAxis();
-
-    // 2. 获取输出类型
-    auto resultTensorType = cast<RankedTensorType>(op.getResult().getType());
-    auto elemType = resultTensorType.getElementType();
-    auto resultShape = resultTensorType.getShape();
-
-    // 3. 获取 src tensor 类型信息
-    auto srcMemRefType = cast<MemRefType>(src.getType());
-    auto srcShape = srcMemRefType.getShape();
-
-    // 4. ReinterpretCast 将 1D 或部分 shape tensor 转成 full shape
-    auto fullSrcMemRefType = MemRefType::get(srcShape, elemType);
-    SmallVector<OpFoldResult> sizes, strides;
-    for (auto dim : srcShape) {
-      sizes.push_back(rewriter.getIndexAttr(dim));
-      strides.push_back(rewriter.getIndexAttr(1));
-    }
-    auto srcMemRef = rewriter.create<memref::ReinterpretCastOp>(
-        loc, fullSrcMemRefType, src, rewriter.getIndexAttr(0), sizes, strides);
-
-    // 5. 分配输出 buffer
-    auto resultMemRefType = MemRefType::get(resultShape, elemType);
-    auto outputBuffer = rewriter.create<memref::AllocOp>(loc, resultMemRefType);
-
-    // 6. 获取 indices shape
-    auto indicesType = cast<RankedTensorType>(gatherIndices.getType());
-    SmallVector<int64_t> indicesShape(indicesType.getShape().begin(),
-                                      indicesType.getShape().end());
-    int64_t numIndices = indicesShape[gatherDim];
-
-    // 7. 构建 SCF for 循环
-    auto zeroIdx = rewriter.create<arith::ConstantIndexOp>(loc, 0);
-    auto numIndicesVal = rewriter.create<arith::ConstantIndexOp>(loc, numIndices);
-    auto stepOne = rewriter.create<arith::ConstantIndexOp>(loc, 1);
-    auto forOp = rewriter.create<scf::ForOp>(loc, zeroIdx, numIndicesVal, stepOne);
-    forOp->setAttr("hivm.parallel_loop", rewriter.getUnitAttr());
-
-    auto loopBody = forOp.getBody();
-    rewriter.setInsertionPointToStart(loopBody);
-    Value iv = forOp.getInductionVar();
-
-    // 8. 从 indices tensor 提取当前 gather index
-    Value gatherIdx = rewriter.create<tensor::ExtractOp>(loc, gatherIndices, ValueRange{iv});
-    Value gatherIdxAsIndex = rewriter.create<arith::IndexCastOp>(
-        loc, rewriter.getIndexType(), gatherIdx);
-
-    // 9. 构建 srcSubview
-    SmallVector<OpFoldResult> srcOffsets, srcSizes, srcStrides;
-    for (size_t i = 0; i < srcShape.size(); ++i) {
-      if (i == static_cast<size_t>(gatherDim)) {
-        srcOffsets.push_back(gatherIdxAsIndex);
-        srcSizes.push_back(rewriter.getIndexAttr(1));
-      } else {
-        srcOffsets.push_back(rewriter.getIndexAttr(0));
-        srcSizes.push_back(rewriter.getIndexAttr(srcShape[i]));
-      }
-      srcStrides.push_back(rewriter.getIndexAttr(1));
-    }
-    auto srcSubview = rewriter.create<memref::SubViewOp>(
-        loc, srcMemRef, srcOffsets, srcSizes, srcStrides);
-
-    // 10. 构建 dstSubview
-    SmallVector<OpFoldResult> dstOffsets, dstSizes, dstStrides;
-    for (size_t i = 0; i < resultShape.size(); ++i) {
-      if (i == static_cast<size_t>(gatherDim)) {
-        dstOffsets.push_back(iv);
-        dstSizes.push_back(rewriter.getIndexAttr(1));
-      } else {
-        dstOffsets.push_back(rewriter.getIndexAttr(0));
-        dstSizes.push_back(rewriter.getIndexAttr(resultShape[i]));
-      }
-      dstStrides.push_back(rewriter.getIndexAttr(1));
-    }
-    auto dstSubview = rewriter.create<memref::SubViewOp>(
-        loc, outputBuffer, dstOffsets, dstSizes, dstStrides);
-
-    // 11. Copy 数据
-    rewriter.create<memref::CopyOp>(loc, srcSubview, dstSubview);
-
-    // 12. 转回 tensor
-    auto resultTensor = rewriter.create<bufferization::ToTensorOp>(
-        loc, resultTensorType, outputBuffer, /*restrict=*/true, /*writable=*/true);
-
-    // 13. 标记并替换原 op
-    resultTensor->setAttr("gather_load", rewriter.getUnitAttr());
-    rewriter.replaceOp(op, resultTensor);
-
-    return success();
-  
- }
-
 } // namespace LoadStoreConverter
-

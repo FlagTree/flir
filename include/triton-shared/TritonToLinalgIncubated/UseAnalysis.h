@@ -135,10 +135,11 @@ public:
 };
 
 LogicalResult runUseAnalysis(triton::FuncOp &funcOp);
+
 } // namespace Incubated
+
 } // namespace triton
 
 } // namespace mlir
 
 #endif // TRITON_CONVERSION_TRITONTOAFFINE_TRITONUSEANALYSIS_H
-

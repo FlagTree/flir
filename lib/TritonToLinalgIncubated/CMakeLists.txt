@@ -1,10 +1,11 @@
 add_triton_library(TritonToLinalgIncubated
-	TritonToLinalgIncubatedPass.cpp
+        TritonToLinalgIncubatedPass.cpp
         LoadStoreConverter.cpp
-	        FunctionConverter.cpp
-	ArgMinMaxConverter.cpp
-	DescriptorConverter.cpp
-	TritonOpConverter.cpp
+        FunctionConverter.cpp
+        ArgMinMaxConverter.cpp
+        DescriptorConverter.cpp
+        TritonOpConverter.cpp
+        HoistBroadcast.cpp
         BlockPtrAnalysis.cpp
         MaskAnalysis.cpp
         UseAnalysis.cpp
@@ -28,5 +29,3 @@ add_triton_library(TritonToLinalgIncubated
   MLIRSCFTransforms
   MLIRLinalgTransforms
 )
-
-

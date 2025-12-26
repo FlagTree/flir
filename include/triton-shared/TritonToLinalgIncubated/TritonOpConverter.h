@@ -44,6 +44,8 @@ namespace TTOpConverters {
 using namespace mlir;
 using namespace triton;
 
+static constexpr unsigned kFuncNameCap = 128;
+
 /*
 Convert `tt.precise_div` operation to `arith.divf` operation.
 tensor_x / tensor_y
@@ -290,9 +292,11 @@ protected:
   }
 
   bool requiresF32Conversion(const Type elemType, Operation *redOp) const {
+    unsigned width =
+        cast<FloatType>(Float32Type::get(elemType.getContext())).getWidth();	  
     return isa<FloatType>(elemType) &&
-          elemType.getIntOrFloatBitWidth() < 32 &&   // +32
-       //       Float32Type::get(elemType.getContext()).getWidth() &&
+          elemType.getIntOrFloatBitWidth() < width && 
+             // Float32Type::get(elemType.getContext()).getWidth() &&
           (isa<arith::AddFOp>(redOp) || isa<arith::MulFOp>(redOp));
   }
 
@@ -541,6 +545,14 @@ struct MatmulConverter : public OpConversionPattern<triton::DotOp> {
                   ConversionPatternRewriter &rewriter) const override;
 };
 
+struct FlipOpConverter : public OpConversionPattern<triton::FlipOp> {
+    using OpConversionPattern<triton::FlipOp>::OpConversionPattern;
+
+    LogicalResult matchAndRewrite(triton::FlipOp op, OpAdaptor adaptor,
+                                  ConversionPatternRewriter &rewriter) const override;
+
+    static constexpr StringRef baseFuncName = "triton_flip";
+};
 
 struct SortOpConverter : public OpConversionPattern<triton::SortOp> {
     using OpConversionPattern<triton::SortOp>::OpConversionPattern;
@@ -566,7 +578,76 @@ public:
                   ConversionPatternRewriter &rewriter) const override;
 };
 
+class EmbeddingGatherConverter : public OpConversionPattern<triton::EmbeddingGatherOp> {
+public:
+  using OpConversionPattern<triton::EmbeddingGatherOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(triton::EmbeddingGatherOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+private:
+  static constexpr llvm::StringRef funcNameBase = "triton_embedding_gather";
+};
+
+class IndexPutConverter : public OpConversionPattern<triton::IndexPutOp> {
+public:
+  using OpConversionPattern<triton::IndexPutOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(triton::IndexPutOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+private:
+  static constexpr llvm::StringRef funcNameBase = "triton_index_put";
+};
+
+class GatherOutToUbConverter : public OpConversionPattern<triton::GatherOutToUbOp> {
+public:
+  using OpConversionPattern<triton::GatherOutToUbOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(triton::GatherOutToUbOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+private:
+  static constexpr llvm::StringRef funcNameBase = "triton__gather_out_to_ub";
+};
+
+class ScatterUbToOutConverter : public OpConversionPattern<triton::ScatterUbToOutOp> {
+public:
+  using OpConversionPattern<triton::ScatterUbToOutOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(triton::ScatterUbToOutOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+private:
+  static constexpr llvm::StringRef funcNameBase = "triton_scatter_ub_to_out";
+};
+
+class IndirectLoadConverter : public OpConversionPattern<triton::IndirectLoadOp> {
+public:
+  using OpConversionPattern<triton::IndirectLoadOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(triton::IndirectLoadOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+private:
+  static constexpr llvm::StringRef funcNameBase = "triton_indirect_load";
+};
+
+class IndirectStoreConverter : public OpConversionPattern<triton::IndirectStoreOp> {
+public:
+  using OpConversionPattern<triton::IndirectStoreOp>::OpConversionPattern;
+  LogicalResult
+  matchAndRewrite(triton::IndirectStoreOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+private:
+  static constexpr llvm::StringRef funcNameBase = "triton_indirect_store";
+};
+
+class IndexSelectSimdConverter : public OpConversionPattern<triton::IndexSelectSimdOp> {
+public:
+  explicit IndexSelectSimdConverter(MLIRContext *context);
+  using OpConversionPattern<triton::IndexSelectSimdOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(triton::IndexSelectSimdOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override;
+};
+
 } // end of namespace TTOpConverters
 
 #endif
-

@@ -221,7 +221,7 @@ DeinterleaveStatusOptimization(triton::LoadOp op,
 LogicalResult DeinterleaveStatusWithMaskOptimization(
     triton::LoadOp op, triton::LoadOp::Adaptor adaptor,
     ConversionPatternRewriter &rewriter, mlir::triton::Incubated::MaskState &mstate,
-    memref::AllocOp originAllocOp) {
+    Value localMem) {
   auto ptr = adaptor.getPtr();
   if (auto reinterpretCast = ptr.getDefiningOp<memref::ReinterpretCastOp>()) {
     auto loc = op.getLoc();
@@ -250,7 +250,7 @@ LogicalResult DeinterleaveStatusWithMaskOptimization(
     // 3. Create new memref allocOp
     // To reuse existing linalg::fill, here need to change insertion point
     auto savedInsertPoint = rewriter.saveInsertionPoint();
-    rewriter.setInsertionPointAfter(originAllocOp);
+    rewriter.setInsertionPointAfterValue(localMem);
     auto newAllocOp = rewriter.create<memref::AllocOp>(
         loc, MemRefType::get(srcType.getShape(), srcType.getElementType()));
     rewriter.restoreInsertionPoint(savedInsertPoint);
@@ -262,10 +262,10 @@ LogicalResult DeinterleaveStatusWithMaskOptimization(
     // current `scf.if + linalg.fill` combination, condition of `if` could be
     // kept and just replace linalg.fill'
     if (other) {
-      assert(originAllocOp->hasOneUse() &&
-             llvm::isa<linalg::FillOp>(*(originAllocOp->getUsers().begin())));
+      assert(localMem.hasOneUse() &&
+             llvm::isa<linalg::FillOp>(*(localMem.getUsers().begin())));
       auto originFillOp =
-          llvm::dyn_cast<linalg::FillOp>(*(originAllocOp->getUsers().begin()));
+          llvm::dyn_cast<linalg::FillOp>(*(localMem.getUsers().begin()));
 
       assert(llvm::isa<scf::IfOp>(originFillOp->getParentOp()));
       auto ifOp = llvm::dyn_cast<scf::IfOp>(originFillOp->getParentOp());
@@ -675,4 +675,3 @@ InterleaveStatusWithMaskOptimization(SmallVector<Operation *> materializeVec) {
 
 } // namespace triton
 } // namespace mlir
-

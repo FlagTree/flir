@@ -83,6 +83,8 @@ void triton::UseAnalysis::visitOperation(Operation *op,
           propagateUse(operands[2], UseType::MetaUse);
         }
       })
+      .Case<triton::PrintOp>(
+          [&](auto print) { propagateUse(operands[0], UseType::DataUse); })
       .Case<triton::AssertOp>(
           [&](auto assert) { propagateUse(operands[0], UseType::DataUse); })
       .Case<triton::StoreOp>([&](auto store) {
@@ -93,6 +95,17 @@ void triton::UseAnalysis::visitOperation(Operation *op,
         if (mask) {
           assert(mask != value && "mask and data cannot be the same");
           propagateUse(operands[2], UseType::MetaUse);
+        }
+      })
+      .Case<triton::IndirectStoreOp>([&](auto store) {
+        propagateUse(operands[0], UseType::MetaUse);
+        propagateUse(operands[1], UseType::MetaUse);
+        propagateUse(operands[2], UseType::DataUse);
+        auto value = store.getValue();
+        auto mask = store.getMask();
+        if (mask) {
+          assert(mask != value && "mask and data cannot be the same");
+          propagateUse(operands[3], UseType::MetaUse);
         }
       })
       // Consider triton::AtomicRMWOp as store operation
@@ -316,6 +329,15 @@ LogicalResult mlir::triton::Incubated::runUseAnalysis(triton::FuncOp &funcOp) {
                 metaUsers.insert(user);
               }
             })
+            .Case<triton::IndirectStoreOp>([&](auto indirectstore) {
+              auto src = indirectstore.getSrc();
+              auto offset = indirectstore.getOffsets();
+              auto mask = indirectstore.getMask();
+              if (result == src || result == offset ||
+                  result == mask) {
+                metaUsers.insert(user);
+              }
+            })
             .Case<triton::AtomicRMWOp>([&](auto atomicOp) {
               auto ptr = atomicOp.getPtr();
               auto mask = atomicOp.getMask();
@@ -338,6 +360,8 @@ LogicalResult mlir::triton::Incubated::runUseAnalysis(triton::FuncOp &funcOp) {
                   splat.getSrc().getDefiningOp<arith::ConstantOp>()) {
                 metaUsers.insert(user);
               }
+            })
+            .Case<triton::PrintOp>([&](auto print) {
             })
             .Default([&](Operation *op) {
               bool allMeta = true;
@@ -397,7 +421,7 @@ LogicalResult mlir::triton::Incubated::runUseAnalysis(triton::FuncOp &funcOp) {
     // We first trace from the 1st load to the 2nd load with the ops between
     // them marked as MixUse. Then we traceback from the 2nd load to mark defs
     // MixUse.
-    if (opIsIndirectLoad(op) || opIsIndirectCalc(op)) {
+    if (opIsIndirectLoad(op) || opIsIndirectCalc(op) || isa<triton::IndirectStoreOp>(op)) {
       LLVM_DEBUG({
         os << "[UseAnalysis] Found indirect load interface op: " << *op << "\n";
       });
@@ -418,8 +442,8 @@ LogicalResult mlir::triton::Incubated::runUseAnalysis(triton::FuncOp &funcOp) {
             // We need to ensure the intermediate ops are marked MixUse
             // so that they will be replaced instead of be erased without
             // conversion.
-            return (isa<triton::LoadOp>(curOp) || isa<triton::StoreOp>(curOp)) && 
-                   !isMetaUse(curOp);
+            return (isa<triton::LoadOp>(curOp) || isa<triton::StoreOp>(curOp) ||
+                   isa<triton::IndirectStoreOp>(curOp)) && !isMetaUse(curOp);
           },
           /*actionFn*/
           [](OpBuilder &b, Operation *op) {
@@ -457,6 +481,10 @@ LogicalResult mlir::triton::Incubated::runUseAnalysis(triton::FuncOp &funcOp) {
         if (auto *defOp = yield.getDefiningOp())
           setMixUseRecursively(defOp);
       }
+    } else if(auto atomicRmwOp = dyn_cast<triton::AtomicRMWOp>(op)) {
+      auto mask = atomicRmwOp.getMask();
+      if(mask  && op->hasAttr(ConverterUtils::discreteMaskAttrName))
+        setMixUseRecursively(mask.getDefiningOp());
     }
   });
   // Remove MetaUse in case of MixUse existing in the op
@@ -493,4 +521,3 @@ LogicalResult MetaUseEraser::matchAndRewrite(Operation *op,
   }
   return rewriter.notifyMatchFailure(op, "requires meta ops");
 }
-

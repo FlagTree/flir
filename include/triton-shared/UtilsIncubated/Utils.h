@@ -218,7 +218,13 @@ addReduceWithIndexAttrIfNeeded(ConversionPatternRewriter &rewriter,
 
 OpFoldResult getOpFoldResultOfLayoutInfo(Value value, OpBuilder &builder);
 
+enum class TypelessValue { Undefined = 0, Zero = 1, Min = 2, Max = 3 };
+
+FailureOr<TypedAttr> specializeTypelessValueToAttr(TypelessValue, Type,
+                                                   OpBuilder &);
+
+FailureOr<Value> specializeTypelessValueToConstant(TypelessValue, Type,
+                                                   Location, OpBuilder &);
 } // namespace mlir
 
 #endif // TRITONNPU_UTILS_UTILS_H
-
