@@ -30,11 +30,7 @@ namespace mlir {
 namespace triton {
 
 #define GEN_PASS_REGISTRATION
-#if 0
-#include "ascend/triton-adapter/include/DiscreteMaskAccessConversion/Passes.h.inc"
-#else
 #include "triton-shared/DiscreteMaskAccessConversion/Passes.h.inc"
-#endif
 
 } // namespace triton
 } // namespace mlir

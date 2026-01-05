@@ -29,18 +29,10 @@
 #include "mlir/IR/PatternMatch.h"
 
 #define GEN_PASS_DECL_DISCRETEMASKACCESSCONVERSION
-#if 0
-#include "ascend/triton-adapter/include/DiscreteMaskAccessConversion/Passes.h.inc"
-#else
 #include "triton-shared/DiscreteMaskAccessConversion/Passes.h.inc"
-#endif
 
 #define GEN_PASS_DEF_DISCRETEMASKACCESSCONVERSION
-#if 0
-#include "ascend/triton-adapter/include/DiscreteMaskAccessConversion/Passes.h.inc"
-#else
 #include "triton-shared/DiscreteMaskAccessConversion/Passes.h.inc"
-#endif
 
 extern bool compileOn91095Flag;
 extern bool forceSimtTemplateFlag;

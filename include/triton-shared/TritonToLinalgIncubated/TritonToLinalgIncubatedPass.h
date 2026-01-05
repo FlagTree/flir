@@ -30,11 +30,8 @@
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #define GEN_PASS_CLASSES
-#if 0
-#include "ascend/triton-adapter/include/TritonToLinalg/Passes.h.inc"
-#else
 #include "triton-shared/TritonToLinalgIncubated/Passes.h.inc"
-#endif
+
 extern int nd2nzFlag;
 extern bool compileOn91095Flag;
 extern bool existDotFlag;
@@ -72,7 +69,7 @@ private:
   bool enableNd2NzOnVector;
   bool enableSelectAnalysis;
   bool compileOn91095;
-  // grid�~^~D�~@|  num_programs 3维, program_id 3维
+  // grid构造 num_programs 3维, program_id 3维
   // remember 'xxxOp' is usually a Pointer, so that we can change target memory
   // without giving a reference argument
   void addProgramInfo(triton::FuncOp func, bool globalKernel);
@@ -89,7 +86,7 @@ private:
 
   LogicalResult convertMultipleBlockControlFlow(Operation *funcOp,
                                                 OpBuilder &builder);
-  // �~D�~P~F�~L�~W�~Z~Dif/else
+  // 处理嵌套的if/else
   scf::IfOp transformNestedIfElse(Operation &nestedBranch, OpBuilder &builder);
 
   void addDynamicLegal(ConversionTarget &target,

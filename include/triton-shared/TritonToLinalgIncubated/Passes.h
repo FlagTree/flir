@@ -25,11 +25,7 @@
 
 #include "triton-shared/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #define GEN_PASS_REGISTRATION
-#if 0
-#include "ascend/triton-adapter/include/TritonToLinalg/Passes.h.inc"
-#else
 #include "triton-shared/TritonToLinalgIncubated/Passes.h.inc"
-#endif
 
 namespace mlir {
 namespace triton {

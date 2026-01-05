@@ -65,11 +65,8 @@ namespace mlir {
 namespace triton {
 
 #define GEN_PASS_CLASSES
-#if 0
-#include "TritonLinearize/Passes.h.inc"
-#else
 #include "triton-shared/TritonLinearize/Passes.h.inc"
-#endif
+
 using namespace mlir::triton_linearize;	
 //namespace {
 
