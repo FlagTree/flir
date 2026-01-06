@@ -34,11 +34,7 @@ namespace triton {
 /// Creates a pass to convert Triton dialect to HFusion dialect.
 
 #define GEN_PASS_REGISTRATION
-#if 0
-#include "ascend/triton-adapter/include/TritonToHFusion/Passes.h.inc"
-#else
 #include "triton-shared/TritonToHFusion/Passes.h.inc"
-#endif
 
 } // namespace triton
 } // namespace mlir

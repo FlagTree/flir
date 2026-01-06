@@ -81,7 +81,7 @@ DeinterleaveStatusOptimization(triton::LoadOp op,
 LogicalResult DeinterleaveStatusWithMaskOptimization(
     triton::LoadOp op, triton::LoadOp::Adaptor adaptor,
     ConversionPatternRewriter &rewriter, mlir::triton::Incubated::MaskState &mstate,
-    memref::AllocOp originAllocOp);
+    Value localMem);
 
 LogicalResult
 InterleaveStatusOptimization(SmallVector<Operation *> materializeVec);
@@ -91,4 +91,3 @@ InterleaveStatusWithMaskOptimization(SmallVector<Operation *> materializeVec);
 
 } // namespace triton
 } // namespace mlir
-
