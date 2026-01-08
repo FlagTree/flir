@@ -21,7 +21,7 @@
  */
 
 #include "incubated/Conversion/TritonLinearize/TritonLinearize.h"
-#include "Utils/Utils.h"
+#include "triton-shared/Utils/Utils.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "llvm/ADT/SmallVectorExtras.h"
