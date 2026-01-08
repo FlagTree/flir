@@ -6,7 +6,6 @@
 namespace mlir {
 namespace triton {
 
-
 #define GEN_PASS_REGISTRATION
 #include "triton-shared/include/TritonLinearize/Passes.h.inc"
 

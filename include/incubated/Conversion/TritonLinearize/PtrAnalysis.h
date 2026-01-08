@@ -31,8 +31,8 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 
-#include "triton/Dialect/Triton/IR/Dialect.h"
 #include "Dialect/TritonStructured/IR/TritonStructuredDialect.h"
+#include "triton/Dialect/Triton/IR/Dialect.h"
 ///////ascend
 #include "triton-shared/Analysis/MaskAnalysis.h"
 #include <cstddef>
@@ -56,49 +56,56 @@ const extern std::string ptrAnalysisAttr;
 // non-block pointer, shape field indicates how address wraps around (i.e.,
 // modulo); a constant 0 indicates no modulo for the dimension.
 
-struct StateInfo{
+struct StateInfo {
   OpFoldResult offset; // final offset with base address
   OpFoldResult stride;
-  OpFoldResult shape; // rem value
-  OpFoldResult mask; //  div value
-  Value dimVar;  // new dim var (for div/rem) 
-  OpFoldResult dimOffset; // offset for new dimVar 
+  OpFoldResult shape;     // rem value
+  OpFoldResult mask;      //  div value
+  Value dimVar;           // new dim var (for div/rem)
+  OpFoldResult dimOffset; // offset for new dimVar
   size_t dim;
   bool remIsBeforeDiv = false;
 
   StateInfo() : dim(0) {}
-  StateInfo(OpFoldResult offset, OpFoldResult stride, 
-            OpFoldResult shape, OpFoldResult mask, size_t dim = 0)
-        : offset(offset), stride(stride), shape(shape), mask(mask), dim(dim) {}
+  StateInfo(OpFoldResult offset, OpFoldResult stride, OpFoldResult shape,
+            OpFoldResult mask, size_t dim = 0)
+      : offset(offset), stride(stride), shape(shape), mask(mask), dim(dim) {}
   void dump() const;
-  
+
   bool hasModulo() const {
-      auto intAttr = getIntAttr(shape);
-      if (!intAttr.has_value()) {
-          return false;
-      }
-      return intAttr.value() != 0;
+    auto intAttr = getIntAttr(shape);
+    if (!intAttr.has_value()) {
+      return false;
+    }
+    return intAttr.value() != 0;
   };
   bool hasDivision() const {
-      auto intAttr = getIntAttr(mask);
-      if (!intAttr.has_value()) {
-          return false;
-      }
-      return intAttr.value() != 0;
+    auto intAttr = getIntAttr(mask);
+    if (!intAttr.has_value()) {
+      return false;
+    }
+    return intAttr.value() != 0;
   };
-
 };
 
 // Group StateInfo by original dimension
 struct StateInfoGroup {
   size_t dim; // original dim
-  SmallVector<size_t> idxes; // indexes of stateInfo belonging to this dim (in original order)
-  int64_t minStride = std::numeric_limits<int64_t>::max(); // The smallest stride within this group
+  SmallVector<size_t>
+      idxes; // indexes of stateInfo belonging to this dim (in original order)
+  int64_t minStride =
+      std::numeric_limits<int64_t>::max(); // The smallest stride within this
+                                           // group
 
   void dump() const;
 };
 
-enum class MemAccVal { Undefined = 0, StrucMemAcc = 1, UnstrucMemAcc = 2, Fallback = 3 };
+enum class MemAccVal {
+  Undefined = 0,
+  StrucMemAcc = 1,
+  UnstrucMemAcc = 2,
+  Fallback = 3
+};
 
 struct MemAccType {
 
@@ -117,9 +124,7 @@ struct MemAccType {
   constexpr bool isUnstructured() const {
     return value == MemAccVal::UnstrucMemAcc;
   }
-  constexpr bool isFallback() const {
-    return value == MemAccVal::Fallback;
-  }
+  constexpr bool isFallback() const { return value == MemAccVal::Fallback; }
 
   void merge(MemAccType &other) {
     this->value = (this->value > other.value) ? this->value : other.value;
@@ -132,38 +137,42 @@ struct MemAccType {
   }
 };
 
-
 /*
 limits:
 
 sizes.size() can greater than stateInfo.size()
-dimLenth.size() = sizes.size() + 1, which initialized in countDims() called by addPtrState(), only triggered when meeting addptrOp.
-when sizes.size()==1 or stateInfo.size()==0 : (scalar || source) must be True.
+dimLenth.size() = sizes.size() + 1, which initialized in countDims() called by
+addPtrState(), only triggered when meeting addptrOp. when sizes.size()==1 or
+stateInfo.size()==0 : (scalar || source) must be True.
 */
 struct PtrState {
 
-  SmallVector<StateInfo> stateInfo; // shape info when load , maintained with visitOps
+  SmallVector<StateInfo>
+      stateInfo; // shape info when load , maintained with visitOps
   SmallVector<OpFoldResult> sizes; // original shape, maintained with visitOps
-  Attribute blockedAttr; // mark if isa tt.make_block_ptr, maintained TODO: maybe unused
+  Attribute blockedAttr; // mark if isa tt.make_block_ptr, maintained TODO:
+                         // maybe unused
 
-
-  SmallVector<int32_t> order; // maintained in makeTensorPtr and advance
+  SmallVector<int32_t> order;   // maintained in makeTensorPtr and advance
   SmallVector<size_t> dimLenth; // maintained only in countDim()
   SmallVector<int32_t> permute; // used if hasPermute()
-  SmallVector<StateInfoGroup> stateInfoGroups; // stateInfo grouped by stride descendingly, maintained in analyzePermute, sortStateByStride
-  bool ptrIsTensor = true; // maintained in addPtrState and Splat // TODO refactor ptrIsTensor
+  SmallVector<StateInfoGroup>
+      stateInfoGroups; // stateInfo grouped by stride descendingly, maintained
+                       // in analyzePermute, sortStateByStride
+  bool ptrIsTensor =
+      true; // maintained in addPtrState and Splat // TODO refactor ptrIsTensor
   MemAccType memAccTy;
 
   Value source; // base address (ptr), maintained with visitOps
   Value scalar; // scalar offset (int), maintained with visitOps
-  
-  void dump() const ;
+
+  void dump() const;
   int32_t getRank() const;
   bool isLegal() const;
 
-  bool isSameSizeAs(const PtrState& x) const;
+  bool isSameSizeAs(const PtrState &x) const;
 
-  bool shouldRemove(const StateInfo& x) const;
+  bool shouldRemove(const StateInfo &x) const;
 
   bool opFoldResultIsZero(OpFoldResult op) const;
 
@@ -187,18 +196,18 @@ struct PtrState {
 
   void setMemAccTy(const MemAccType &);
   void setMemAccVal(const MemAccVal);
-  MemAccType getMemAccType() const ;
-  MemAccType &getMemAccTypeRef() ;
+  MemAccType getMemAccType() const;
+  MemAccType &getMemAccTypeRef();
   void removeSource() { this->source = nullptr; };
   bool hasSource() const { return this->source != nullptr; }
 
-  // This function transforms constant dimensions in a matrix into offsets, 
-  // effectively removing those dimensions. It simplifies the matrix by 
+  // This function transforms constant dimensions in a matrix into offsets,
+  // effectively removing those dimensions. It simplifies the matrix by
   // eliminating unnecessary constant dimensions.
   LogicalResult removeConstDim(SmallVector<StateInfo> &InfoPerDim,
                                Operation *op, OpBuilder &builder);
 
-  // Check whether the current read count is less than the batch size and 
+  // Check whether the current read count is less than the batch size and
   // broadcast the data along the highest dimension if needed.
   LogicalResult broadcastIfNeeded(SmallVector<StateInfo> &InfoPerDim,
                                   OpBuilder &builder);
@@ -211,16 +220,15 @@ struct PtrState {
   LogicalResult mulState(const PtrState &lhsState, const PtrState &rhsState,
                          Operation *op, OpBuilder &builder);
 
-  LogicalResult subState(const PtrState &lhsState,
-                                 const PtrState &rhsState, Operation *op,
-                                 OpBuilder &builder);
+  LogicalResult subState(const PtrState &lhsState, const PtrState &rhsState,
+                         Operation *op, OpBuilder &builder);
 
   // Process addition of ptr and offset.
   LogicalResult addPtrState(const PtrState &lhsState, const PtrState &rhsState,
                             Operation *op, OpBuilder &builder);
 
-  LogicalResult ExpandInfo(SmallVector<StateInfo> &InfoPerDim,
-                                      Operation *op, OpBuilder &builder);
+  LogicalResult ExpandInfo(SmallVector<StateInfo> &InfoPerDim, Operation *op,
+                           OpBuilder &builder);
 
   // analyze Permute info.
   LogicalResult analyzePermute(SmallVector<StateInfo> &InfoPerDim,
@@ -229,7 +237,6 @@ struct PtrState {
   // sort stateInfo by stride descendingly.
   LogicalResult sortStateByStride(SmallVector<StateInfo> &InfoPerDim,
                                   Operation *op, OpBuilder &builder);
-
 
   triton::AddPtrOp createAddPtrOp(OpBuilder &builder, Location loc);
 };
@@ -256,8 +263,8 @@ class PtrAnalysis {
       llvm::function_ref<Value(scf::ForOp op, size_t)> getReplacementVal);
 
   PtrState reconcileWhilePtrState(
-    scf::WhileOp whileOp, size_t argIndex, const PtrState &state,
-    llvm::function_ref<Value(scf::WhileOp op, size_t)> getReplacementVal);
+      scf::WhileOp whileOp, size_t argIndex, const PtrState &state,
+      llvm::function_ref<Value(scf::WhileOp op, size_t)> getReplacementVal);
 
   DenseSet<Value> maybeStructuredArgs;
 
@@ -273,7 +280,8 @@ public:
 
   // Recursively parse a Value; call the corresponding
   // function based on the defining operation and argument type.
-  LogicalResult visitOperand(Value operand, PtrState &state, const Location loc, OpBuilder &builder);
+  LogicalResult visitOperand(Value operand, PtrState &state, const Location loc,
+                             OpBuilder &builder);
 
   // Operand is a result of an scf.for. Such cases occur when there are multiple
   // levels of nested loops where the results of the inner scf.for (pointer) are
@@ -312,10 +320,9 @@ public:
   //  strides[i] = tensorState.strides[i] * scalar
   LogicalResult visitOperandMul(arith::MulIOp mulOp, PtrState &state,
                                 const Location loc, OpBuilder &builder);
-  
+
   LogicalResult visitOperandSub(arith::SubIOp subOp, PtrState &state,
-                                           const Location loc,
-                                           OpBuilder &builder);
+                                const Location loc, OpBuilder &builder);
 
   LogicalResult visitOperandRem(arith::RemSIOp mulOp, PtrState &state,
                                 const Location loc, OpBuilder &builder);
@@ -373,10 +380,10 @@ public:
   //  sizes[i] reflect the shape of the result, strides[i] = 0,  offsets[i] =
   //  splat value if i == 0, otherwise 0
   LogicalResult visitOperandConstSplat(arith::ConstantOp op, PtrState &state,
-const Location loc, OpBuilder &builder);
+                                       const Location loc, OpBuilder &builder);
 
   LogicalResult visitOperandExtSI(arith::ExtSIOp, PtrState &state,
-                                       const Location loc, OpBuilder &builder);
+                                  const Location loc, OpBuilder &builder);
 
   // Operand is the result of addptr.
   // Main assumptions:
@@ -395,19 +402,20 @@ const Location loc, OpBuilder &builder);
                                           OpBuilder &builder);
 
   template <typename OpType>
-  LogicalResult visitOperandIndirectLoad(OpType op, PtrState &state, 
-                                      const Location &loc,
-                                      OpBuilder &builder) ;
+  LogicalResult visitOperandIndirectLoad(OpType op, PtrState &state,
+                                         const Location &loc,
+                                         OpBuilder &builder);
 
-  LogicalResult visitOperandMakeTensorDescOp(triton::MakeTensorDescOp tensorDescType,
-                                       PtrState &state, const Location loc,
-                                       OpBuilder &builder) ;
+  LogicalResult
+  visitOperandMakeTensorDescOp(triton::MakeTensorDescOp tensorDescType,
+                               PtrState &state, const Location loc,
+                               OpBuilder &builder);
 
   LogicalResult visitOperandDescriptorLoad(triton::DescriptorLoadOp descLoadOp,
-                                       PtrState &state, const Location loc,
-                                       OpBuilder &builder);
+                                           PtrState &state, const Location loc,
+                                           OpBuilder &builder);
 
-// Get the computed PtrState for the forOp's init-arg at the provided index.
+  // Get the computed PtrState for the forOp's init-arg at the provided index.
   FailureOr<PtrState> getLoopInitArgPtrState(scf::ForOp forOp, size_t index);
 
   // Get the computed PtrState for the forOp's iter-arg at the provided index.
@@ -426,7 +434,6 @@ const Location loc, OpBuilder &builder);
   // PtrState for knownPtrs.
   LogicalResult rewriteAddptrOp(triton::AddPtrOp op);
 
-
   // Parse the state of YieldOp, insert any instruction needed to calculate
   // strides and offsets, build PtrState for this operand, and record PtrState
   // in knownPtrs.
@@ -439,33 +446,49 @@ const Location loc, OpBuilder &builder);
   // strides, offsets, and modulos.
   LogicalResult rewriteForOp(scf::ForOp op);
   LogicalResult rewriteWhileOp(scf::WhileOp op);
-  FailureOr<PtrState> getWhileInitArgPtrState(scf::WhileOp whileOp, size_t index);
-  FailureOr<PtrState> getWhileResultPtrState(scf::WhileOp whileOp, size_t index);
-  FailureOr<PtrState> getWhileAfterArgPtrState(scf::WhileOp whileOp, size_t index);
-  FailureOr<PtrState> getWhileBeforeArgPtrState(scf::WhileOp whileOp, size_t index);
+  FailureOr<PtrState> getWhileInitArgPtrState(scf::WhileOp whileOp,
+                                              size_t index);
+  FailureOr<PtrState> getWhileResultPtrState(scf::WhileOp whileOp,
+                                             size_t index);
+  FailureOr<PtrState> getWhileAfterArgPtrState(scf::WhileOp whileOp,
+                                               size_t index);
+  FailureOr<PtrState> getWhileBeforeArgPtrState(scf::WhileOp whileOp,
+                                                size_t index);
 
-  LogicalResult analysisSplat(Operation *op, OpBuilder &builder, Value &ptr, PtrState &ptrState);
-  LogicalResult extractScalarFromLoadedTensor(Operation* op, OpBuilder &builder, 
-                                                Value &loadResult, const Location loc);
+  LogicalResult analysisSplat(Operation *op, OpBuilder &builder, Value &ptr,
+                              PtrState &ptrState);
+  LogicalResult extractScalarFromLoadedTensor(Operation *op, OpBuilder &builder,
+                                              Value &loadResult,
+                                              const Location loc);
 
-  LogicalResult rewriteScalarLoadOp(triton::LoadOp op, OpBuilder &builder, 
-                                                Value &loadResult, const Location loc);
-  
+  LogicalResult rewriteScalarLoadOp(triton::LoadOp op, OpBuilder &builder,
+                                    Value &loadResult, const Location loc);
+
   LogicalResult createBroadcast(Operation *op, SmallVector<int64_t> &loadShape,
-                                            Value &loadResult);
+                                Value &loadResult);
 
-  LogicalResult createReshape(Operation *op, Value &loadResult, SmallVector<int64_t> &srcShape);
+  LogicalResult createReshape(Operation *op, Value &loadResult,
+                              SmallVector<int64_t> &srcShape);
   ///////////ascend
-//  LogicalResult analyzeMask(Operation * op, PtrState &ptrState, triton_linearize::MaskState& maskState, 
-//                              SmallVector<OpFoldResult> &dims, SmallVector<int64_t> &dimMode);
+  //  LogicalResult analyzeMask(Operation * op, PtrState &ptrState,
+  //  triton_linearize::MaskState& maskState,
+  //                              SmallVector<OpFoldResult> &dims,
+  //                              SmallVector<int64_t> &dimMode);
 
-//  Value buildMaskValue(Value& ptr, PtrState& ptrState, triton_linearize::MaskState& maskState, OpBuilder& builder, Location loc);
-  LogicalResult analyzeMask(Operation * op, PtrState &ptrState, triton::MaskState& maskState, 
-                              SmallVector<OpFoldResult> &dims, SmallVector<int64_t> &dimMode);
+  //  Value buildMaskValue(Value& ptr, PtrState& ptrState,
+  //  triton_linearize::MaskState& maskState, OpBuilder& builder, Location loc);
+  LogicalResult analyzeMask(Operation *op, PtrState &ptrState,
+                            triton::MaskState &maskState,
+                            SmallVector<OpFoldResult> &dims,
+                            SmallVector<int64_t> &dimMode);
 
-  Value buildMaskValue(Value& ptr, PtrState& ptrState, triton::MaskState& maskState, OpBuilder& builder, Location loc);
-/////ascend
-  Value alignMaskForFallback(Value mask, ArrayRef<int64_t> targetShape, const PtrState &ptrState, OpBuilder &builder, Location loc);
+  Value buildMaskValue(Value &ptr, PtrState &ptrState,
+                       triton::MaskState &maskState, OpBuilder &builder,
+                       Location loc);
+  /////ascend
+  Value alignMaskForFallback(Value mask, ArrayRef<int64_t> targetShape,
+                             const PtrState &ptrState, OpBuilder &builder,
+                             Location loc);
 
   LogicalResult checkModifiedByAddPtrConverter(triton::LoadOp &op) const;
   LogicalResult rewriteLoadOp(triton::LoadOp op);
@@ -475,9 +498,8 @@ const Location loc, OpBuilder &builder);
   LogicalResult rewriteOp(Operation *op);
 };
 
-} // namespace triton
+} // namespace triton_linearize
 
 } // namespace mlir
 
 #endif
-

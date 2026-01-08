@@ -31,25 +31,25 @@
 namespace mlir {
 
 Value materializeValue(OpBuilder &builder, Location loc, OpFoldResult ofr) {
-  if (auto val = ofr.dyn_cast<Value>()) { 
-    return val; 
+  if (auto val = ofr.dyn_cast<Value>()) {
+    return val;
   }
-  
+
   auto intVal = getIntAttr(ofr);
   if (intVal.has_value()) {
-    return builder.create<arith::ConstantOp>(loc, builder.getI32IntegerAttr(intVal.value()));
+    return builder.create<arith::ConstantOp>(
+        loc, builder.getI32IntegerAttr(intVal.value()));
   }
   assert(intVal.has_value());
   return Value();
 
   // return builder.create<arith::ConstantIndexOp>(
   //     loc, dyn_cast<IntegerAttr>(attr).getInt());
-}  
+}
 
 std::optional<int64_t> getIntAttr(const OpFoldResult ofr) {
   if (ofr.is<Attribute>() && isa<IntegerAttr>(ofr.get<Attribute>()))
     return dyn_cast<IntegerAttr>(ofr.get<Attribute>()).getInt();
-  
 
   return std::nullopt;
 }
@@ -129,8 +129,9 @@ OpFoldResult addOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
         b.create<arith::ConstantOp>(loc, b.getIndexAttr(lhsIntAttr.value()));
     lhsValue = lhsOp.getResult();
   } else {
-    if(isa<IntegerType>(lhsValue.getType())){
-      lhsValue = b.create<arith::IndexCastOp>(loc, indextype, lhsValue).getResult();
+    if (isa<IntegerType>(lhsValue.getType())) {
+      lhsValue =
+          b.create<arith::IndexCastOp>(loc, indextype, lhsValue).getResult();
     }
     assert(isa<IndexType>(lhsValue.getType()));
   }
@@ -141,8 +142,9 @@ OpFoldResult addOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
         b.create<arith::ConstantOp>(loc, b.getIndexAttr(rhsIntAttr.value()));
     rhsValue = rhsOp.getResult();
   } else {
-    if(isa<IntegerType>(rhsValue.getType())){
-      rhsValue = b.create<arith::IndexCastOp>(loc, indextype, rhsValue).getResult();
+    if (isa<IntegerType>(rhsValue.getType())) {
+      rhsValue =
+          b.create<arith::IndexCastOp>(loc, indextype, rhsValue).getResult();
     }
     assert(isa<IndexType>(rhsValue.getType()));
   }
@@ -184,7 +186,7 @@ OpFoldResult subOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
 
 OpFoldResult mulOFRValue(const OpFoldResult lhs, const Value rhs,
                          const Location loc, OpBuilder &b) {
-   auto lhsIntAttr = getIntAttr(lhs);
+  auto lhsIntAttr = getIntAttr(lhs);
 
   auto rhsIsConst = false;
   // if rhs is not a const, use max value since min is used to represent
@@ -206,14 +208,13 @@ OpFoldResult mulOFRValue(const OpFoldResult lhs, const Value rhs,
       return lhs;
     if (lhsIntAttr.value() == 1)
       return rhs;
-    }
-    if (rhsIsConst) {
+  }
+  if (rhsIsConst) {
     if (rhsConstValue == 0)
       return rhsOp.getResult();
     if (rhsConstValue == 1)
       return lhs;
   }
-
 
   // 1. if lhs is constant but rhs is not
   if (lhsIntAttr && !rhsIsConst) {
@@ -234,7 +235,7 @@ OpFoldResult divOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
   auto lhsIntAttr = getIntAttr(lhs);
   auto rhsIntAttr = getIntAttr(rhs);
 
-   // both lhs and rhs are constants, return result directly
+  // both lhs and rhs are constants, return result directly
   if (lhsIntAttr && rhsIntAttr)
     return b.getIndexAttr(lhsIntAttr.value() / rhsIntAttr.value());
 
@@ -266,7 +267,7 @@ OpFoldResult remOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
   auto lhsIntAttr = getIntAttr(lhs);
   auto rhsIntAttr = getIntAttr(rhs);
 
-   // both lhs and rhs are constants, return result directly
+  // both lhs and rhs are constants, return result directly
   if (lhsIntAttr && rhsIntAttr)
     return b.getIndexAttr(lhsIntAttr.value() % rhsIntAttr.value());
 
@@ -301,7 +302,7 @@ OpFoldResult mulOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
   // both lhs and rhs are constants, return result directly
   if (lhsIntAttr && rhsIntAttr)
     return b.getIndexAttr(lhsIntAttr.value() * rhsIntAttr.value());
-  
+
   // shortcuts for special cases
   if (lhsIntAttr) {
     if (lhsIntAttr.value() == 0)
@@ -315,7 +316,6 @@ OpFoldResult mulOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
     if (rhsIntAttr.value() == 1)
       return lhs;
   }
-
 
   // otherwise, need to create instructions to calculate new attribute value
   auto lhsValue = dyn_cast<Value>(lhs);
@@ -393,4 +393,3 @@ OpFoldResult maxOFRs(const OpFoldResult lhs, const OpFoldResult rhs,
 }
 
 } // namespace mlir
-

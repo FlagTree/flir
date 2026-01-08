@@ -21,8 +21,8 @@
  */
 
 #include "incubated/Conversion/DiscreteMaskAccessConversion/Passes.h"
-#include "incubated/Conversion/UtilsIncubated/Utils.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/MaskAnalysis.h"
+#include "incubated/Conversion/UtilsIncubated/Utils.h"
 
 #if __has_include("bishengir/Dialect/HIVM/IR/HIVM.h")
 #include "bishengir/Dialect/HIVM/IR/HIVM.h"
@@ -64,57 +64,60 @@ LogicalResult isDiscreteMask(Operation *op, Value mask,
 struct DiscreteMaskStoreConversion : OpRewritePattern<triton::StoreOp> {
   using OpRewritePattern<triton::StoreOp>::OpRewritePattern;
 
-LogicalResult matchAndRewrite(triton::StoreOp op,
-                              PatternRewriter &rewriter) const final {
-  auto mask = op.getMask();
-  auto loc = op.getLoc();
-  auto dst = op.getPtr();
-  auto src = op.getValue();
+  LogicalResult matchAndRewrite(triton::StoreOp op,
+                                PatternRewriter &rewriter) const final {
+    auto mask = op.getMask();
+    auto loc = op.getLoc();
+    auto dst = op.getPtr();
+    auto src = op.getValue();
 
-  if (failed(isDiscreteMask(op, mask, rewriter)))
-    return failure();
+    if (failed(isDiscreteMask(op, mask, rewriter)))
+      return failure();
 
-  auto loadFromDstOp = rewriter.create<triton::LoadOp>(
-      loc, dst, op.getCache(), op.getEvict(), false);
+    auto loadFromDstOp = rewriter.create<triton::LoadOp>(
+        loc, dst, op.getCache(), op.getEvict(), false);
 
-  auto selOp = rewriter.create<arith::SelectOp>(loc, mask, src, loadFromDstOp.getResult());
-  auto newStore = rewriter.create<triton::StoreOp>(
-              loc, dst, selOp, op.getCache(), op.getEvict());
-  newStore->setAttr(ConverterUtils::discreteMaskAttrName, UnitAttr::get(rewriter.getContext()));
-  rewriter.replaceOp(op, newStore);
-  return success();
-}
+    auto selOp = rewriter.create<arith::SelectOp>(loc, mask, src,
+                                                  loadFromDstOp.getResult());
+    auto newStore = rewriter.create<triton::StoreOp>(
+        loc, dst, selOp, op.getCache(), op.getEvict());
+    newStore->setAttr(ConverterUtils::discreteMaskAttrName,
+                      UnitAttr::get(rewriter.getContext()));
+    rewriter.replaceOp(op, newStore);
+    return success();
+  }
 };
 
 struct DiscreteMaskLoadConversion : OpRewritePattern<triton::LoadOp> {
   using OpRewritePattern<triton::LoadOp>::OpRewritePattern;
 
-LogicalResult matchAndRewrite(triton::LoadOp op,
-                              PatternRewriter &rewriter) const final {
-  auto loc = op.getLoc();
-  auto other = op.getOther();
-  auto mask = op.getMask();
-  auto ptr = op.getPtr();
+  LogicalResult matchAndRewrite(triton::LoadOp op,
+                                PatternRewriter &rewriter) const final {
+    auto loc = op.getLoc();
+    auto other = op.getOther();
+    auto mask = op.getMask();
+    auto ptr = op.getPtr();
 
-  if (failed(isDiscreteMask(op, mask, rewriter)))
-    return failure();
-  if (compileOn91095Flag && forceSimtTemplateFlag)
-    return failure();
+    if (failed(isDiscreteMask(op, mask, rewriter)))
+      return failure();
+    if (compileOn91095Flag && forceSimtTemplateFlag)
+      return failure();
 
-  if (!other) {
-    FailureOr<Value> constant = specializeTypelessValueToConstant(
-        TypelessValue::Zero, ptr.getType(), loc, rewriter);
-    if (failed(constant))
-      llvm_unreachable("Unsupported type for constant creation");
-    other = *constant;
+    if (!other) {
+      FailureOr<Value> constant = specializeTypelessValueToConstant(
+          TypelessValue::Zero, ptr.getType(), loc, rewriter);
+      if (failed(constant))
+        llvm_unreachable("Unsupported type for constant creation");
+      other = *constant;
+    }
+
+    auto newLoadOp = rewriter.create<triton::LoadOp>(
+        loc, ptr, op.getCache(), op.getEvict(), op.getIsVolatile());
+    auto discreteMaskOp =
+        rewriter.create<arith::SelectOp>(loc, mask, newLoadOp, other);
+    rewriter.replaceOp(op, discreteMaskOp);
+    return success();
   }
-
-  auto newLoadOp = rewriter.create<triton::LoadOp>(
-      loc, ptr, op.getCache(), op.getEvict(), op.getIsVolatile());
-  auto discreteMaskOp = rewriter.create<arith::SelectOp>(loc, mask, newLoadOp, other);
-  rewriter.replaceOp(op, discreteMaskOp);
-  return success();
-}
 };
 
 struct DiscreteMaskAtomicConversion : OpRewritePattern<AtomicRMWOp> {

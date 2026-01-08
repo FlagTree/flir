@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  */
 
-#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/SCF/Transforms/Patterns.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -32,23 +32,23 @@
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LogicalResult.h"
 
-//#include "TritonLinearize/OpFoldResultUtils.h"
+// #include "TritonLinearize/OpFoldResultUtils.h"
 
-//#include "TritonLinearize/MaskAnalysis.h"
-#include "triton-shared/Analysis/OpFoldResultUtils.h"
+// #include "TritonLinearize/MaskAnalysis.h"
 #include "triton-shared/Analysis/MaskAnalysis.h"
+#include "triton-shared/Analysis/OpFoldResultUtils.h"
 
+#include "Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 #include "TritonLinearize/PtrAnalysis.h"
 #include "TritonLinearize/TritonLinearize.h"
-#include "Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 
-#include "triton/Dialect/Triton/IR/Dialect.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "mlir/Transforms/OneToNTypeConversion.h"
 #include "mlir/Transforms/Passes.h"
+#include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/Triton/IR/Types.h"
 
 #include "llvm/ADT/STLExtras.h"
@@ -67,12 +67,10 @@ namespace triton {
 #define GEN_PASS_CLASSES
 #include "incubated/Conversion/TritonLinearize/Passes.h.inc"
 
-using namespace mlir::triton_linearize;	
-//namespace {
+using namespace mlir::triton_linearize;
+// namespace {
 
-class TritonLinearizePass
-    : public TritonLinearizeBase<TritonLinearizePass> 
-{
+class TritonLinearizePass : public TritonLinearizeBase<TritonLinearizePass> {
 private:
   static TupleType getStructuredStateTupleType(MLIRContext *context, Type t) {
     SmallVector<Type> tupleTypes{t};
@@ -97,7 +95,7 @@ public:
     RewritePatternSet patterns(&getContext());
 
     auto context = &getContext();
-    //OneToNTypeConverter converter;
+    // OneToNTypeConverter converter;
     TypeConverter converter;
     converter.addConversion([](Type type) { return type; });
 
@@ -115,7 +113,7 @@ public:
       // pointer arithmetic sequence.
       if (!isa<triton::PointerType>(tensorType.getElementType()) &&
           !tensorType.getElementType().isIntOrIndex()) {
-             return std::nullopt;
+        return std::nullopt;
       }
       types =
           SmallVector<Type>{getStructuredStateTupleType(context, tensorType)};
@@ -147,21 +145,22 @@ public:
 
     // Compute the target materialization, given a value with the pointer type,
     // convert that value to a tuple type.
-   /* converter.addTargetMaterialization(
-        [](OpBuilder &builder, TypeRange resultTypes, Value input,
-           Location loc) -> std::optional<SmallVector<Value>> {
-          return builder
-              .create<UnrealizedConversionCastOp>(loc, resultTypes, input)
-              ->getResults();
-        });
-    */
-       converter.addTargetMaterialization(
-        [](OpBuilder &builder, TypeRange resultTypes, ValueRange inputs,
-           Location loc) -> SmallVector<Value> {
-          return builder
-              .create<UnrealizedConversionCastOp>(loc, resultTypes, inputs.front())
-              ->getResults();
-        });
+    /* converter.addTargetMaterialization(
+         [](OpBuilder &builder, TypeRange resultTypes, Value input,
+            Location loc) -> std::optional<SmallVector<Value>> {
+           return builder
+               .create<UnrealizedConversionCastOp>(loc, resultTypes, input)
+               ->getResults();
+         });
+     */
+    converter.addTargetMaterialization([](OpBuilder &builder,
+                                          TypeRange resultTypes,
+                                          ValueRange inputs,
+                                          Location loc) -> SmallVector<Value> {
+      return builder
+          .create<UnrealizedConversionCastOp>(loc, resultTypes, inputs.front())
+          ->getResults();
+    });
     scf::populateSCFStructuralOneToNTypeConversions(converter, patterns);
 
     if (failed(applyPartialOneToNConversion(getOperation(), converter,
@@ -182,7 +181,7 @@ public:
     auto moduleOp = getOperation();
 
     auto context = &getContext();
-    //OneToNTypeConverter converter;
+    // OneToNTypeConverter converter;
     TypeConverter converter;
     converter.addConversion([](Type type) { return type; });
 
@@ -226,9 +225,9 @@ public:
       assert(llvm::equal(placeholder.getResultTypes(), resultTypes));
       return placeholder.getResults();
     });*/
-     converter.addTargetMaterialization([](OpBuilder &builder,
-                                          TypeRange resultTypes, ValueRange inputs,
-                                          Location loc) {
+    converter.addTargetMaterialization([](OpBuilder &builder,
+                                          TypeRange resultTypes,
+                                          ValueRange inputs, Location loc) {
       auto placeholder = builder.create<tts::GetStructuredStateOp>(
           loc, inputs.front().getDefiningOp()->getOperand(0));
       assert(llvm::equal(placeholder.getResultTypes(), resultTypes));
@@ -321,12 +320,11 @@ public:
       return failure();
     }
 
-    if( failed( decomposePointerTuple())){
-      return failure() ;
+    if (failed(decomposePointerTuple())) {
+      return failure();
     }
-    
-    return success() ;
 
+    return success();
   }
 
   void runOnOperation() override {
@@ -362,9 +360,9 @@ public:
 
 //} // namespace
 
-std::unique_ptr<OperationPass<ModuleOp>> createTritonLinearizePass() 
-{
+std::unique_ptr<OperationPass<ModuleOp>> createTritonLinearizePass() {
   return std::make_unique<TritonLinearizePass>();
 }
 
-}}
+} // namespace triton
+} // namespace mlir

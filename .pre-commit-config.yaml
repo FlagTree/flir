@@ -16,5 +16,5 @@ repos:
     rev: v16.0.6
     hooks:
       - id: clang-format
-        files: '^(include/triton-shared/Conversion/MemrefCopyToDMA_FlagTree/.*\.h|lib/Conversion/MemrefCopyToDMA_FlagTree/.*\.cpp|include/triton-shared/Conversion/TritonArithToLinalg/ConversionPatterns_FlagTree\.hpp)$'
+        files: '^(include/triton-shared/Conversion/MemrefCopyToDMA_FlagTree/.*\.h|lib/Conversion/MemrefCopyToDMA_FlagTree/.*\.cpp|include/triton-shared/Conversion/TritonArithToLinalg/ConversionPatterns_FlagTree\.hpp|include/incubated/Conversion/(BubbleUpOperation|DiscreteMaskAccessConversion|TritonToAnnotation|TritonToLinalgIncubated|TritonToUnstructureIncubated|TritonLinearize)/.*\.(h|hpp)|include/npu/Conversion/(TritonToHIVM|TritonToHFusion|TritonToLLVM)/.*\.(h|hpp)|include/mlir-ext/.*\.(h|hpp)|lib/Conversion/(BubbleUpOperation|DiscreteMaskAccessConversion|TritonToHIVM|TritonToHFusion|TritonToLLVM|TritonToAnnotation|TritonToLinalgIncubated|TritonToUnstructureIncubated|TritonLinearize)/.*\.cpp|lib/UtilsIncubated/.*\.(cpp|h|hpp))$'
         stages: [pre-commit, pre-push, manual]

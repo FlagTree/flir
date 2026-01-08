@@ -12,7 +12,6 @@ namespace triton {
 /// Creates a pass to convert Triton dialect to Annotation dialect.
 std::unique_ptr<OperationPass<ModuleOp>> createTritonToAnnotationPass();
 
-
 } // namespace triton
 } // namespace mlir
 
