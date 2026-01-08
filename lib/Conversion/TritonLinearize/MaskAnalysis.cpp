@@ -37,7 +37,7 @@
 #include <cassert>
 #include <cstddef>
 
-#include "Utils/Utils.h"
+#include "triton-shared/Utils/Utils.h"
 #include "mlir/Dialect/Utils/StaticValueUtils.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
