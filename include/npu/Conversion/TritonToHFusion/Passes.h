@@ -18,21 +18,25 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
- */
+*/
 
-#ifndef TRITON_TO_HIVM_CONVERSION_PASSES_H
-#define TRITON_TO_HIVM_CONVERSION_PASSES_H
+#ifndef TRITON_TO_HFUSION_CONVERSION_PASSES_H
+#define TRITON_TO_HFUSION_CONVERSION_PASSES_H
 
 #include "mlir/Pass/Pass.h"
-#include "triton-shared/TritonToHIVM/TritonToHIVM.h"
+#include "npu/Conversion/TritonToHFusion/TritonToHFusion.h"
 
 namespace mlir {
+// Forward declarations.
+
 namespace triton {
 
+/// Creates a pass to convert Triton dialect to HFusion dialect.
+
 #define GEN_PASS_REGISTRATION
-#include "triton-shared/TritonToHIVM/Passes.h.inc"
+#include "npu/Conversion/TritonToHFusion/Passes.h.inc"
 
 } // namespace triton
 } // namespace mlir
 
-#endif // TRITON_TO_HIVM_CONVERSION_PASSES_H
+#endif // TRITON_TO_HFUSION_CONVERSION_PASSES_H

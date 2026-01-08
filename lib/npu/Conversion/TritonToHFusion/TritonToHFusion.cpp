@@ -3,7 +3,7 @@
  * Licensed under the MIT license.
  */
 
-#include "triton-shared/TritonToHFusion/Passes.h"
+#include "npu/Conversion/TritonToHFusion/Passes.h"
 #if __has_include("bishengir/Dialect/HFusion/IR/HFusion.h")
 #include "bishengir/Dialect/HFusion/IR/HFusion.h"
 #endif
@@ -25,7 +25,7 @@
 namespace mlir {
 namespace triton {
 #define GEN_PASS_DEF_TRITONTOHFUSION
-#include "triton-shared/TritonToHFusion/Passes.h.inc"
+#include "npu/Conversion/TritonToHFusion/Passes.h.inc"
 } // namespace triton
 } // namespace mlir
 

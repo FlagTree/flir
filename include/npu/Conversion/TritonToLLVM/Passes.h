@@ -7,7 +7,7 @@
 #define TRITON_TO_LLVM_CONVERSION_PASSES_H
 
 #include "mlir/Pass/Pass.h"
-#include "triton-shared/TritonToLLVM/TritonToLLVM.h"
+#include "npu/Conversion/TritonToLLVM/TritonToLLVM.h"
 namespace mlir {
 // Forward declarations.
 
@@ -16,7 +16,7 @@ namespace triton {
 /// Creates a pass to convert Triton dialect to LLVM dialect.
 
 #define GEN_PASS_REGISTRATION
-#include "triton-shared/TritonToLLVM/Passes.h.inc"
+#include "npu/Conversion/TritonToLLVM/Passes.h.inc"
 
 } // namespace triton
 } // namespace mlir

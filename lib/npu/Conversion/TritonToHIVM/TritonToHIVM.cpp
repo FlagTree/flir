@@ -19,7 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "triton-shared/TritonToHIVM/Passes.h"
+#include "npu/Conversion/TritonToHIVM/Passes.h"
 #if __has_include("bishengir/Dialect/HIVM/IR/HIVM.h")
 #include "bishengir/Dialect/HIVM/IR/HIVM.h"
 #endif
@@ -34,7 +34,7 @@
 namespace mlir {
 namespace triton {
 #define GEN_PASS_DEF_TRITONTOHIVM
-#include "triton-shared/TritonToHIVM/Passes.h.inc"
+#include "npu/Conversion/TritonToHIVM/Passes.h.inc"
 } // namespace triton
 } // namespace mlir
 

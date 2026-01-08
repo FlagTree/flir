@@ -1,4 +1,4 @@
-#include "triton-shared/TritonToLLVM/Passes.h"
+#include "npu/Conversion/TritonToLLVM/Passes.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -14,7 +14,7 @@
 namespace mlir {
 namespace triton {
 #define GEN_PASS_DEF_TRITONTOLLVM
-#include "triton-shared/TritonToLLVM/Passes.h.inc"
+#include "npu/Conversion/TritonToLLVM/Passes.h.inc"
 } // namespace triton
 } // namespace mlir
 
