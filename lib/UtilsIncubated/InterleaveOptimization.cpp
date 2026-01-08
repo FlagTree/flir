@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  */
 
-#include "UtilsIncubated/InterleaveOptimization.h"
-#include "UtilsIncubated/Utils.h"
+#include "incubated/Conversion/UtilsIncubated/InterleaveOptimization.h"
+#include "incubated/Conversion/UtilsIncubated/Utils.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"

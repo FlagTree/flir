@@ -30,8 +30,8 @@
 #include "TritonToLinalgIncubated/LoadStoreConverter.h"
 #include "TritonToLinalgIncubated/MaskAnalysis.h"
 #include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
-#include "UtilsIncubated/InterleaveOptimization.h"
-#include "UtilsIncubated/Utils.h"
+#include "incubated/Conversion/UtilsIncubated/InterleaveOptimization.h"
+#include "incubated/Conversion/UtilsIncubated/Utils.h"
 #if __has_include("bishengir/Dialect/Annotation/IR/Annotation.h")
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"
 #endif
