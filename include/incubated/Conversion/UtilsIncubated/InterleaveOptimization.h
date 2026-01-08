@@ -25,7 +25,7 @@
 #include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
 #include "TritonToLinalgIncubated/MaskAnalysis.h"
 #include "TritonToLinalgIncubated/UseAnalysis.h"
-#include "UtilsIncubated/Utils.h"
+#include "incubated/Conversion/UtilsIncubated/Utils.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"
 

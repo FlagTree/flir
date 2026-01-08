@@ -21,11 +21,11 @@
  */
 
 #include "incubated/Conversion/TritonToLinalgIncubated/DescriptorConverter.h"
-#include "incubated/Conversion/UtilsIncubated/Utils.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/BlockPtrAnalysis.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/MaskAnalysis.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/TritonOpConverter.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
+#include "incubated/Conversion/UtilsIncubated/Utils.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "llvm/ADT/SmallVectorExtras.h"

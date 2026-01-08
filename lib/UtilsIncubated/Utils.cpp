@@ -20,7 +20,7 @@
  * THE SOFTWARE.
  */
 
-#include "UtilsIncubated/Utils.h"
+#include "incubated/Conversion/UtilsIncubated/Utils.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"

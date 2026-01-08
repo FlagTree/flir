@@ -22,8 +22,6 @@
  */
 
 #include "incubated/Conversion/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
-#include "UtilsIncubated/InterleaveOptimization.h"
-#include "UtilsIncubated/Utils.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/ArgMinMaxConverter.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/DescriptorConverter.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/FunctionConverter.h"
@@ -31,6 +29,8 @@
 #include "incubated/Conversion/TritonToLinalgIncubated/LoadStoreConverter.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/TritonOpConverter.h"
 #include "incubated/Conversion/TritonToLinalgIncubated/UseAnalysis.h"
+#include "incubated/Conversion/UtilsIncubated/InterleaveOptimization.h"
+#include "incubated/Conversion/UtilsIncubated/Utils.h"
 #include "mlir/Conversion/GPUToROCDL/Runtimes.h"
 #include "mlir/Conversion/MathToEmitC/MathToEmitC.h"
 #include "mlir/Dialect/Complex/IR/Complex.h"
