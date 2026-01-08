@@ -40,7 +40,9 @@ namespace mlir {
 namespace triton {
 namespace Incubated {
 
-std::unique_ptr<OperationPass<ModuleOp>> createTritonToLinalgIncubatedPass(bool globalKernel, bool namedOps, bool enableNd2NzOnVector, bool enableSelectAnalysis, bool compileOn91095);
+std::unique_ptr<OperationPass<ModuleOp>> createTritonToLinalgIncubatedPass(
+    bool globalKernel, bool namedOps, bool enableNd2NzOnVector,
+    bool enableSelectAnalysis, bool compileOn91095);
 
 enum TensorKind { NONE = -1, INPUT = 0, OUTPUT = 1, INPUT_OUTPUT = 2 };
 
@@ -57,7 +59,8 @@ public:
   explicit TritonTypeConverter();
 };
 
-class TritonToLinalgIncubatedPass : public TritonToLinalgIncubatedBase<TritonToLinalgIncubatedPass> {
+class TritonToLinalgIncubatedPass
+    : public TritonToLinalgIncubatedBase<TritonToLinalgIncubatedPass> {
 
   static auto constexpr LAUNCH_GRID_RANK = getMaxEnumValForProgramIDDim() + 1;
   static unsigned int constexpr TRITON_PROGRAM_INFO_ARG_COUNT =
@@ -75,14 +78,16 @@ private:
   void addProgramInfo(triton::FuncOp func, bool globalKernel);
 
   template <typename OpTy>
-  void addTensorKindToArguments(OpTy op, triton::FuncOp func, TensorKind tensorKind);
+  void addTensorKindToArguments(OpTy op, triton::FuncOp func,
+                                TensorKind tensorKind);
 
   template <TensorKind Kind, typename... Ops>
   void walkAndMarkTensorKind(triton::FuncOp func);
 
   void annotateTensorKindForModule(ModuleOp moduleOp);
 
-  void convertTTFunc(triton::FuncOp func, const bool existDot, const bool existSIMTOp);
+  void convertTTFunc(triton::FuncOp func, const bool existDot,
+                     const bool existSIMTOp);
 
   LogicalResult convertMultipleBlockControlFlow(Operation *funcOp,
                                                 OpBuilder &builder);
@@ -103,8 +108,14 @@ private:
   LogicalResult processPtrBroadcastOperations(ModuleOp moduleOp);
 
 public:
-  TritonToLinalgIncubatedPass(bool globalKernel_ = true, bool namedOps_ = false, bool enableNd2NzOnVector_ = false, bool enableSelectAnalysis_ = false,  bool compileOn91095_ = false)   
-      : globalKernel(globalKernel_), namedOps(namedOps_), enableNd2NzOnVector(enableNd2NzOnVector_), enableSelectAnalysis(enableSelectAnalysis_), compileOn91095(compileOn91095_) {}
+  TritonToLinalgIncubatedPass(bool globalKernel_ = true, bool namedOps_ = false,
+                              bool enableNd2NzOnVector_ = false,
+                              bool enableSelectAnalysis_ = false,
+                              bool compileOn91095_ = false)
+      : globalKernel(globalKernel_), namedOps(namedOps_),
+        enableNd2NzOnVector(enableNd2NzOnVector_),
+        enableSelectAnalysis(enableSelectAnalysis_),
+        compileOn91095(compileOn91095_) {}
 
   void getDependentDialects(DialectRegistry &registry) const override;
 
@@ -142,14 +153,16 @@ private:
   void addProgramInfo(triton::FuncOp func, bool globalKernel);
 
   template <typename OpTy>
-  void addTensorKindToArguments(OpTy op, triton::FuncOp func, TensorKind tensorKind);
+  void addTensorKindToArguments(OpTy op, triton::FuncOp func, TensorKind
+tensorKind);
 
   template <TensorKind Kind, typename... Ops>
   void walkAndMarkTensorKind(triton::FuncOp func);
 
   void annotateTensorKindForModule(ModuleOp moduleOp);
 
-  void convertTTFunc(triton::FuncOp func, const bool existDot, const bool existSIMTOp);
+  void convertTTFunc(triton::FuncOp func, const bool existDot, const bool
+existSIMTOp);
 
   LogicalResult convertMultipleBlockControlFlow(Operation *funcOp,
                                                 OpBuilder &builder);

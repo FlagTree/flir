@@ -33,143 +33,141 @@ using namespace mlir;
 using namespace hfusion;
 
 namespace {
-  struct TritonModToHFusionConversion
-    : OpRewritePattern<triton::ModOp> {
-    using OpRewritePattern<triton::ModOp>::OpRewritePattern;
+struct TritonModToHFusionConversion : OpRewritePattern<triton::ModOp> {
+  using OpRewritePattern<triton::ModOp>::OpRewritePattern;
 
-    LogicalResult matchAndRewrite(triton::ModOp op,
-                                  PatternRewriter &rewriter) const final {
-      auto lhsType = dyn_cast<RankedTensorType>(op.getLhs().getType());
-      auto rhsType = dyn_cast<RankedTensorType>(op.getRhs().getType());
-      if (!lhsType || !rhsType) {
-        return failure();
-      }
-
-      auto emptyTensor = rewriter.create<tensor::EmptyOp>(
-          op.getLoc(), lhsType.getShape(), lhsType.getElementType());
-      auto newOp =
-          hfusion::createBinaryOp<hfusion::ElemwiseBinaryOp, hfusion::BinaryFn,
-                                  hfusion::BinaryFnAttr>(
-              rewriter, op.getLoc(), hfusion::BinaryFn::mod,
-              ValueRange({op.getLhs(), op.getRhs()}),
-              ValueRange({emptyTensor.getResult()}));
-
-      rewriter.replaceOp(op, newOp->getResult(0));
-      return success();
+  LogicalResult matchAndRewrite(triton::ModOp op,
+                                PatternRewriter &rewriter) const final {
+    auto lhsType = dyn_cast<RankedTensorType>(op.getLhs().getType());
+    auto rhsType = dyn_cast<RankedTensorType>(op.getRhs().getType());
+    if (!lhsType || !rhsType) {
+      return failure();
     }
-  };
 
-  struct TritonHistogramToHFusionConversion
+    auto emptyTensor = rewriter.create<tensor::EmptyOp>(
+        op.getLoc(), lhsType.getShape(), lhsType.getElementType());
+    auto newOp =
+        hfusion::createBinaryOp<hfusion::ElemwiseBinaryOp, hfusion::BinaryFn,
+                                hfusion::BinaryFnAttr>(
+            rewriter, op.getLoc(), hfusion::BinaryFn::mod,
+            ValueRange({op.getLhs(), op.getRhs()}),
+            ValueRange({emptyTensor.getResult()}));
+
+    rewriter.replaceOp(op, newOp->getResult(0));
+    return success();
+  }
+};
+
+struct TritonHistogramToHFusionConversion
     : OpRewritePattern<triton::HistogramOp> {
-    using OpRewritePattern<triton::HistogramOp>::OpRewritePattern;
+  using OpRewritePattern<triton::HistogramOp>::OpRewritePattern;
 
-    LogicalResult matchAndRewrite(triton::HistogramOp op,
-      PatternRewriter &rewriter) const final {
-      auto loc = op.getLoc();
-      Value input = op.getSrc();
-      auto resultType = op.getResult().getType();
+  LogicalResult matchAndRewrite(triton::HistogramOp op,
+                                PatternRewriter &rewriter) const final {
+    auto loc = op.getLoc();
+    Value input = op.getSrc();
+    auto resultType = op.getResult().getType();
 
-      int64_t numBins = 256; // 256 is default fallback.
-      if (auto rankedTy = dyn_cast<RankedTensorType>(resultType))
-        if (rankedTy.hasStaticShape() && rankedTy.getNumElements() > 0)
-          numBins = rankedTy.getNumElements();
+    int64_t numBins = 256; // 256 is default fallback.
+    if (auto rankedTy = dyn_cast<RankedTensorType>(resultType))
+      if (rankedTy.hasStaticShape() && rankedTy.getNumElements() > 0)
+        numBins = rankedTy.getNumElements();
 
-      auto numBinsAttr = rewriter.getI64IntegerAttr(numBins);
+    auto numBinsAttr = rewriter.getI64IntegerAttr(numBins);
 
-      auto newOp = rewriter.create<hfusion::HistogramOp>(
-        loc, resultType, input, numBinsAttr, Value());
+    auto newOp = rewriter.create<hfusion::HistogramOp>(loc, resultType, input,
+                                                       numBinsAttr, Value());
 
-      rewriter.replaceOp(op, newOp.getResult());
-      return success();
+    rewriter.replaceOp(op, newOp.getResult());
+    return success();
+  }
+};
+
+struct TritonFpToFpToHFusionConversion : OpRewritePattern<triton::FpToFpOp> {
+  using OpRewritePattern<triton::FpToFpOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(triton::FpToFpOp op,
+                                PatternRewriter &rewriter) const final {
+    auto loc = op.getLoc();
+    Value input = op.getSrc();
+    auto resultType = op.getResult().getType();
+
+    // Check if rounding mode is specified
+    auto roundingMode = op.getRounding();
+    if (!roundingMode.has_value()) {
+      // No rounding mode specified, don't convert
+      return failure();
     }
-  };
 
-  struct TritonFpToFpToHFusionConversion
-    : OpRewritePattern<triton::FpToFpOp> {
-    using OpRewritePattern<triton::FpToFpOp>::OpRewritePattern;
+    // Only handle float-to-float conversions with explicit rounding mode
+    auto srcType = cast<TensorType>(input.getType());
+    auto dstType = cast<TensorType>(resultType);
+    if (!srcType.getElementType().isIntOrFloat() ||
+        !dstType.getElementType().isIntOrFloat()) {
+      return failure();
+    }
 
-    LogicalResult matchAndRewrite(triton::FpToFpOp op,
-      PatternRewriter &rewriter) const final {
-      auto loc = op.getLoc();
-      Value input = op.getSrc();
-      auto resultType = op.getResult().getType();
-      
-      // Check if rounding mode is specified
-      auto roundingMode = op.getRounding();
-      if (!roundingMode.has_value()) {
-        // No rounding mode specified, don't convert
-        return failure();
-      }
+    // Check if this is a floating point downcast that needs special rounding
+    unsigned srcBitwidth = srcType.getElementType().getIntOrFloatBitWidth();
+    unsigned dstBitwidth = dstType.getElementType().getIntOrFloatBitWidth();
 
-      // Only handle float-to-float conversions with explicit rounding mode
-      auto srcType = cast<TensorType>(input.getType());
-      auto dstType = cast<TensorType>(resultType);
-      if (!srcType.getElementType().isIntOrFloat() || 
-          !dstType.getElementType().isIntOrFloat()) {
-        return failure();
-      }
+    if (srcBitwidth <= dstBitwidth) {
+      // Not a downcast, don't need special handling
+      return failure();
+    }
 
-      // Check if this is a floating point downcast that needs special rounding
-      unsigned srcBitwidth = srcType.getElementType().getIntOrFloatBitWidth();
-      unsigned dstBitwidth = dstType.getElementType().getIntOrFloatBitWidth();
-      
-      if (srcBitwidth <= dstBitwidth) {
-        // Not a downcast, don't need special handling
-        return failure();
-      }
+    // Map Triton rounding mode to HFusion rounding mode
+    // Note: The Python frontend (semantic.py) currently only generates FpToFpOp
+    // for non-RTNE rounding modes. RTNE downcast uses create_fp_trunc instead.
+    // However, we keep RTNE handling here for completeness.
+    hfusion::RoundMode hfusionRoundMode;
+    switch (roundingMode.value()) {
+    case triton::RoundingMode::RTNE:
+      hfusionRoundMode = hfusion::RoundMode::RINT;
+      break;
+    case triton::RoundingMode::RTZ:
+      hfusionRoundMode = hfusion::RoundMode::TRUNC;
+      break;
+    default:
+      return op.emitError("Unsupported rounding mode for HFusion conversion");
+    }
 
-      // Map Triton rounding mode to HFusion rounding mode
-      // Note: The Python frontend (semantic.py) currently only generates FpToFpOp
-      // for non-RTNE rounding modes. RTNE downcast uses create_fp_trunc instead.
-      // However, we keep RTNE handling here for completeness.
-      hfusion::RoundMode hfusionRoundMode;
-      switch (roundingMode.value()) {
-        case triton::RoundingMode::RTNE:
-          hfusionRoundMode = hfusion::RoundMode::RINT;
-          break;
-        case triton::RoundingMode::RTZ:
-          hfusionRoundMode = hfusion::RoundMode::TRUNC;
-          break;
-        default:
-          return op.emitError("Unsupported rounding mode for HFusion conversion");
-      }
+    // Get or create destination tensor (destination-style)
+    SmallVector<Value> dsts;
+    if (failed(tensor::getOrCreateDestinations(rewriter, loc, op, dsts)))
+      return failure();
 
-      // Get or create destination tensor (destination-style)
-      SmallVector<Value> dsts;
-      if (failed(tensor::getOrCreateDestinations(rewriter, loc, op, dsts)))
-        return failure();
+    // Create the HFusion cast operation with round_mode attribute
+    auto roundModeAttr =
+        hfusion::RoundModeAttr::get(rewriter.getContext(), hfusionRoundMode);
+    auto modeAttr = rewriter.getNamedAttr("mode", roundModeAttr);
 
-      // Create the HFusion cast operation with round_mode attribute
-      auto roundModeAttr = hfusion::RoundModeAttr::get(
-          rewriter.getContext(), hfusionRoundMode);
-      auto modeAttr = rewriter.getNamedAttr("mode", roundModeAttr);
-
-      rewriter.replaceOpWithNewOp<hfusion::CastOp>(
+    rewriter.replaceOpWithNewOp<hfusion::CastOp>(
         op, ValueRange{input}, ValueRange{dsts}, ArrayRef{modeAttr});
 
-      return success();
-    }
-  };
-}
+    return success();
+  }
+};
+} // namespace
 
 namespace {
-    struct TritonToHFusionPass
-        : public mlir::triton::impl::TritonToHFusionBase<
-            TritonToHFusionPass> {
-    void runOnOperation() override;
-    };
+struct TritonToHFusionPass
+    : public mlir::triton::impl::TritonToHFusionBase<TritonToHFusionPass> {
+  void runOnOperation() override;
+};
 } // namespace
 
 void TritonToHFusionPass::runOnOperation() {
   auto module = getOperation();
-  
+
   // Use greedy pattern rewriter for simpler pattern matching
-  // Patterns decide themselves whether to convert (via returning success/failure)
+  // Patterns decide themselves whether to convert (via returning
+  // success/failure)
   RewritePatternSet patterns(&getContext());
   patterns.add<TritonHistogramToHFusionConversion>(patterns.getContext());
   patterns.add<TritonFpToFpToHFusionConversion>(patterns.getContext());
   patterns.add<TritonModToHFusionConversion>(patterns.getContext());
-  
+
   // Apply patterns with greedy rewriting
   // This allows patterns to return failure() without causing pass failure
   if (failed(applyPatternsAndFoldGreedily(module, std::move(patterns)))) {
@@ -177,6 +175,7 @@ void TritonToHFusionPass::runOnOperation() {
   }
 }
 
-std::unique_ptr<OperationPass<ModuleOp>> mlir::triton::createTritonToHFusionPass() {
+std::unique_ptr<OperationPass<ModuleOp>>
+mlir::triton::createTritonToHFusionPass() {
   return std::make_unique<TritonToHFusionPass>();
 }

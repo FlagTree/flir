@@ -5,8 +5,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Utils/StaticValueUtils.h"
 #include "mlir/IR/Attributes.h"
@@ -21,8 +21,8 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/Transforms/DialectConversion.h"
 
-#include "triton/Dialect/Triton/IR/Dialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/Triton/IR/Types.h"
 
 #include "llvm/ADT/ArrayRef.h"
@@ -37,14 +37,14 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
-#include <utility>
 #include <queue>
 #include <string>
+#include <utility>
 
-#include "triton-shared/Analysis/MaskAnalysis.h"
 #include "TritonLinearize/PtrAnalysis.h"
-#include "triton-shared/Analysis/OpFoldResultUtils.h"
 #include "Utils/Utils.h"
+#include "triton-shared/Analysis/MaskAnalysis.h"
+#include "triton-shared/Analysis/OpFoldResultUtils.h"
 
 #define DEBUG_TYPE "triton-linearize-ptr-analysis"
 
@@ -119,82 +119,79 @@ static Value getScalarValue(Value operand, Location loc, OpBuilder &builder) {
 }
 
 namespace triton_linearize {
-using mlir::triton::MaskState;
 using mlir::triton::dimInfo;
-
+using mlir::triton::MaskState;
 
 void StateInfo::dump() const {
-    LLVM_DEBUG({
-       llvm::dbgs()  << "PtrStateInfo: \n" ;
-       llvm::dbgs()  << "dim = " << dim << "\n";
-       llvm::dbgs()  << "mask = " << mask << "\n";
-       llvm::dbgs()  << "shape = " << shape << "\n";       
-       llvm::dbgs()  << "offset = " << offset << "\n";
-       llvm::dbgs()  << "stride = " << stride << "\n"; 
-       llvm::dbgs()  << "dimVar = " << dimVar << "\n";    
-       llvm::dbgs()  << "dimOffset = " << dimOffset << "\n";     
-       llvm::dbgs()  << "remIsBeforeDiv = " << remIsBeforeDiv << "\n";
-    });
+  LLVM_DEBUG({
+    llvm::dbgs() << "PtrStateInfo: \n";
+    llvm::dbgs() << "dim = " << dim << "\n";
+    llvm::dbgs() << "mask = " << mask << "\n";
+    llvm::dbgs() << "shape = " << shape << "\n";
+    llvm::dbgs() << "offset = " << offset << "\n";
+    llvm::dbgs() << "stride = " << stride << "\n";
+    llvm::dbgs() << "dimVar = " << dimVar << "\n";
+    llvm::dbgs() << "dimOffset = " << dimOffset << "\n";
+    llvm::dbgs() << "remIsBeforeDiv = " << remIsBeforeDiv << "\n";
+  });
 };
 
 void StateInfoGroup::dump() const {
-    LLVM_DEBUG({
-       llvm::dbgs()  << "StateInfoGroup: \n" ;
-       llvm::dbgs()  << "dim = " << dim << "\n";
-       llvm::dbgs()  << "minStride = " << minStride << "\n";       
-       llvm::dbgs()  << "idxes: (";
-       for (auto idx : idxes){
-          llvm::dbgs()  << idx << ",";
-       }
-       llvm::dbgs()  << ")\n";       
-    });
+  LLVM_DEBUG({
+    llvm::dbgs() << "StateInfoGroup: \n";
+    llvm::dbgs() << "dim = " << dim << "\n";
+    llvm::dbgs() << "minStride = " << minStride << "\n";
+    llvm::dbgs() << "idxes: (";
+    for (auto idx : idxes) {
+      llvm::dbgs() << idx << ",";
+    }
+    llvm::dbgs() << ")\n";
+  });
 };
 
 void PtrState::dump() const {
   LLVM_DEBUG({
-  llvm::dbgs() << "source:" << source << "\n";
-  llvm::dbgs() << "scalar:" << scalar << "\n";
-  llvm::dbgs() << "memAccTy:" << memAccTy.toString() << "\n";
-  llvm::dbgs() << "dimLenth:(";
-  for (int i = 0; i < dimLenth.size();i++ ){
-     llvm::dbgs() << dimLenth[i] << ",";
-  }
-  llvm::dbgs() << ")\n";
-
-  llvm::dbgs() << "size:(";
-  for (int i = 0; i < sizes.size(); i++ ){
-     llvm::dbgs() << sizes[i] << ",";
-  }
-  llvm::dbgs() << ")\n";
-  llvm::dbgs() << "permute:(";
-  if (hasPermute()){
-    for (int i = 0; i < permute.size(); i++ ){
-       llvm::dbgs() << permute[i] << ",";
+    llvm::dbgs() << "source:" << source << "\n";
+    llvm::dbgs() << "scalar:" << scalar << "\n";
+    llvm::dbgs() << "memAccTy:" << memAccTy.toString() << "\n";
+    llvm::dbgs() << "dimLenth:(";
+    for (int i = 0; i < dimLenth.size(); i++) {
+      llvm::dbgs() << dimLenth[i] << ",";
     }
-  }
-  llvm::dbgs() << ")\n";
-  llvm::dbgs() << "stateInfo:\n";
-  llvm::dbgs() << "\n";
+    llvm::dbgs() << ")\n";
+
+    llvm::dbgs() << "size:(";
+    for (int i = 0; i < sizes.size(); i++) {
+      llvm::dbgs() << sizes[i] << ",";
+    }
+    llvm::dbgs() << ")\n";
+    llvm::dbgs() << "permute:(";
+    if (hasPermute()) {
+      for (int i = 0; i < permute.size(); i++) {
+        llvm::dbgs() << permute[i] << ",";
+      }
+    }
+    llvm::dbgs() << ")\n";
+    llvm::dbgs() << "stateInfo:\n";
+    llvm::dbgs() << "\n";
   });
-  for (int i = 0; i < stateInfo.size(); i++ ){
+  for (int i = 0; i < stateInfo.size(); i++) {
     stateInfo[i].dump();
-  }  
+  }
 }
 
-int32_t PtrState::getRank() const {
-  return stateInfo.size();
-}
+int32_t PtrState::getRank() const { return stateInfo.size(); }
 
 bool PtrState::isLegal() const {
   return !stateInfo.empty() || scalar || source;
 }
 
-bool PtrState::isSameSizeAs(const PtrState& x) const {
-  if(sizes.size() != x.sizes.size())
+bool PtrState::isSameSizeAs(const PtrState &x) const {
+  if (sizes.size() != x.sizes.size())
     return false;
 
-  for(size_t i = 0; i < sizes.size(); ++i){
-    if(sizes[i] != x.sizes[i])
+  for (size_t i = 0; i < sizes.size(); ++i) {
+    if (sizes[i] != x.sizes[i])
       return false;
   }
   return true;
@@ -203,33 +200,36 @@ bool PtrState::isSameSizeAs(const PtrState& x) const {
 MemAccType PtrState::getMemAccType() const { return this->memAccTy; };
 MemAccType &PtrState::getMemAccTypeRef() { return this->memAccTy; };
 
-bool PtrState::shouldRemove(const StateInfo& x) const {
-    auto staticMask = getIntAttr(x.mask);
-    auto staticStride = getIntAttr(x.stride);
-    auto staticShape = getIntAttr(x.shape);
-    auto staticSize = getIntAttr(sizes[x.dim]);
+bool PtrState::shouldRemove(const StateInfo &x) const {
+  auto staticMask = getIntAttr(x.mask);
+  auto staticStride = getIntAttr(x.stride);
+  auto staticShape = getIntAttr(x.shape);
+  auto staticSize = getIntAttr(sizes[x.dim]);
 
-    // Constant Dimension: For example, 'xindex % 1024 + 4096', the number 4096
-    // is a fixed value. It serves as a static offset or component in the calculatio
-    if(staticMask.has_value() && staticStride.has_value() && staticShape.has_value() &&
-       staticMask.value() == 0 && staticStride.value() == 0 && staticShape.value() == 0){
+  // Constant Dimension: For example, 'xindex % 1024 + 4096', the number 4096
+  // is a fixed value. It serves as a static offset or component in the
+  // calculatio
+  if (staticMask.has_value() && staticStride.has_value() &&
+      staticShape.has_value() && staticMask.value() == 0 &&
+      staticStride.value() == 0 && staticShape.value() == 0) {
 
-        return true;
+    return true;
 
-    // When a dimension is divided by a number that is a positive integer multiple of
-    // each read, it effectively acts as an offset. For example, in the expression
+    // When a dimension is divided by a number that is a positive integer
+    // multiple of each read, it effectively acts as an offset. For example, in
+    // the expression
     // '(xindex + id * Xblock) / 8192', if Xblock is 512, then all values of
-    // 'xindex / 8192' in this tensor will be the same. In this case, it is equivalent
-    // to an offset.
-    }
-    // else if(staticMask.has_value() && staticSize.has_value() &&
-    //          staticMask.value() % staticSize.value() == 0 &&
-    //          staticMask.value() != 0
-    //          ){
-    //       return true;
-    // }
+    // 'xindex / 8192' in this tensor will be the same. In this case, it is
+    // equivalent to an offset.
+  }
+  // else if(staticMask.has_value() && staticSize.has_value() &&
+  //          staticMask.value() % staticSize.value() == 0 &&
+  //          staticMask.value() != 0
+  //          ){
+  //       return true;
+  // }
 
-    return false;
+  return false;
 }
 
 bool PtrState::isEmpty() const {
@@ -251,11 +251,12 @@ bool PtrState::hasModulo() const {
 }
 
 bool PtrState::hasBroadcast() const {
-  for(auto x : stateInfo){
+  for (auto x : stateInfo) {
     auto staticStride = getIntAttr(x.stride);
     // assert(staticStride.has_value() && "do not support dynamic stride");
     // if(staticStride == 0) return true;
-    if(staticStride.has_value() && staticStride == 0) return true;
+    if (staticStride.has_value() && staticStride == 0)
+      return true;
   }
   return false;
 }
@@ -269,9 +270,7 @@ bool PtrState::hasDivision() const {
   return false;
 }
 
-bool PtrState::hasPermute() const {
-  return !permute.empty();
-}
+bool PtrState::hasPermute() const { return !permute.empty(); }
 
 bool PtrState::dimHasDivision(uint32_t dim) const {
   assert(
@@ -286,7 +285,6 @@ bool PtrState::dimHasDivision(uint32_t dim) const {
   }
 
   return intAttr.value() != 0;
-
 }
 
 bool PtrState::dimHasModulo(uint32_t dim) const {
@@ -306,37 +304,45 @@ bool PtrState::dimHasModulo(uint32_t dim) const {
 
 bool PtrState::isBlockPtr() const { return !order.empty(); }
 
-LogicalResult PtrState::broadcastIfNeeded(SmallVector<StateInfo> &infoPerDim, OpBuilder &builder) {
-    auto defaultAttr = builder.getIndexAttr(0);
-    auto staticSize = getIntAttr(this->sizes[infoPerDim[0].dim]);
-    assert(staticSize.has_value() && "do not support dynamic size");
-    int64_t readSize = 1;
+LogicalResult PtrState::broadcastIfNeeded(SmallVector<StateInfo> &infoPerDim,
+                                          OpBuilder &builder) {
+  auto defaultAttr = builder.getIndexAttr(0);
+  auto staticSize = getIntAttr(this->sizes[infoPerDim[0].dim]);
+  assert(staticSize.has_value() && "do not support dynamic size");
+  int64_t readSize = 1;
 
-    for (StateInfo info : infoPerDim) {
-      auto staticShape =  getIntAttr(info.shape);
-      auto staticMask = getIntAttr(info.mask);
+  for (StateInfo info : infoPerDim) {
+    auto staticShape = getIntAttr(info.shape);
+    auto staticMask = getIntAttr(info.mask);
 
-      assert(staticShape.has_value() && staticMask.has_value() && "do not support dynamic shape/mask");
-      // when rem after div:
-      // range(0, 8) // 4 -> div_size = (8 - 1) // 4 + 1 = 2
-      // but if rem before div:
-      // (range(0, 8) % 4) // 4 -> div_size = (4 - 1) // 4 + 1 = 1
-      int64_t divDim = staticMask.value() ? ((info.remIsBeforeDiv ? staticShape.value() : staticSize.value()) - 1) / staticMask.value() + 1 : staticSize.value();
-      int64_t remsiDim = staticShape.value() ? staticShape.value() : staticSize.value();
+    assert(staticShape.has_value() && staticMask.has_value() &&
+           "do not support dynamic shape/mask");
+    // when rem after div:
+    // range(0, 8) // 4 -> div_size = (8 - 1) // 4 + 1 = 2
+    // but if rem before div:
+    // (range(0, 8) % 4) // 4 -> div_size = (4 - 1) // 4 + 1 = 1
+    int64_t divDim = staticMask.value()
+                         ? ((info.remIsBeforeDiv ? staticShape.value()
+                                                 : staticSize.value()) -
+                            1) / staticMask.value() +
+                               1
+                         : staticSize.value();
+    int64_t remsiDim =
+        staticShape.value() ? staticShape.value() : staticSize.value();
 
-      readSize *= std::min(divDim, remsiDim);
-    }
-    // (0,8)%2 : real read size can not fill original size
-    if (readSize < staticSize.value()) {
-      // 补维
-      int64_t brcDim = (staticSize.value() - 1) / readSize + 1;
-      auto shape = builder.getIndexAttr(brcDim);
-      auto mask = builder.getIndexAttr(readSize);
-      StateInfo broadcasrInfo(defaultAttr, defaultAttr, shape, mask);
-      infoPerDim.push_back(broadcasrInfo);
-    }
+    readSize *= std::min(divDim, remsiDim);
+  }
+  // (0,8)%2 : real read size can not fill original size
+  if (readSize < staticSize.value()) {
+    // 补维
+    int64_t brcDim = (staticSize.value() - 1) / readSize + 1;
+    auto shape = builder.getIndexAttr(brcDim);
+    auto mask = builder.getIndexAttr(readSize);
+    StateInfo broadcasrInfo(defaultAttr, defaultAttr, shape, mask);
+    infoPerDim.push_back(broadcasrInfo);
+  }
 
-    return success();
+  return success();
 }
 
 bool PtrState::countDims() {
@@ -358,9 +364,10 @@ bool PtrState::countDims() {
   // Use a map to track the first occurrence of each dimension
   llvm::DenseMap<unsigned, unsigned> dimToIndex;
   unsigned insert_pos = 0;
-  for (const auto& info : stateInfo) {
+  for (const auto &info : stateInfo) {
     unsigned dim = info.dim;
-    while (insert_pos < dimLenthInDimOrder.size() && dimLenthInDimOrder[insert_pos] == 0) {
+    while (insert_pos < dimLenthInDimOrder.size() &&
+           dimLenthInDimOrder[insert_pos] == 0) {
       ++insert_pos;
     }
     if (dimToIndex.count(dim)) {
@@ -374,13 +381,13 @@ bool PtrState::countDims() {
       }
       dimLenth[dimToIndex[dim]] = 1;
       ++insert_pos;
-  }
+    }
   }
 
   // Ensure dimLenth has size sizes.size() + 1
   while (dimLenth.size() < sizes.size() + 1) {
     dimLenth.push_back(0);
-    }
+  }
 
   // Ensure dimLenth has size sizes.size() + 1
   while (dimLenth.size() < sizes.size() + 1) {
@@ -390,39 +397,40 @@ bool PtrState::countDims() {
 }
 
 LogicalResult PtrState::removeConstDim(SmallVector<StateInfo> &infoPerDim,
-                                        Operation *op, OpBuilder &builder) {
-    auto loc = op->getLoc();
-    auto defaultAttr = builder.getIndexAttr(0);
-    OpFoldResult offsetDim = defaultAttr;
+                                       Operation *op, OpBuilder &builder) {
+  auto loc = op->getLoc();
+  auto defaultAttr = builder.getIndexAttr(0);
+  OpFoldResult offsetDim = defaultAttr;
 
-    for (auto x : infoPerDim) {
-      offsetDim = addOFRs(offsetDim, x.offset, loc, builder);
-    }
+  for (auto x : infoPerDim) {
+    offsetDim = addOFRs(offsetDim, x.offset, loc, builder);
+  }
 
-    infoPerDim.erase(
-        std::remove_if(infoPerDim.begin(), infoPerDim.end(),
-                       [this](const StateInfo& x) { return shouldRemove(x); }),
-        infoPerDim.end()
-    );
+  infoPerDim.erase(
+      std::remove_if(infoPerDim.begin(), infoPerDim.end(),
+                     [this](const StateInfo &x) { return shouldRemove(x); }),
+      infoPerDim.end());
 
-    if(infoPerDim.empty()){ // this dim is all constants
-      StateInfo placeHolder(offsetDim, defaultAttr, defaultAttr, defaultAttr);
-      infoPerDim.push_back(placeHolder);
-    }
+  if (infoPerDim.empty()) { // this dim is all constants
+    StateInfo placeHolder(offsetDim, defaultAttr, defaultAttr, defaultAttr);
+    infoPerDim.push_back(placeHolder);
+  }
 
-    // collect all offsets to dim0
-    for(size_t i = 0;  i < infoPerDim.size(); ++i){
-      if(i == 0)  infoPerDim[i].offset = offsetDim;
-      else        infoPerDim[i].offset = defaultAttr;
-    }
+  // collect all offsets to dim0
+  for (size_t i = 0; i < infoPerDim.size(); ++i) {
+    if (i == 0)
+      infoPerDim[i].offset = offsetDim;
+    else
+      infoPerDim[i].offset = defaultAttr;
+  }
 
-
-    return success();
+  return success();
 }
 
 LogicalResult PtrState::ExpandInfo(SmallVector<StateInfo> &infoPerDim,
-                                      Operation *op, OpBuilder &builder) {
-  if(infoPerDim.size() == 0)  return success();
+                                   Operation *op, OpBuilder &builder) {
+  if (infoPerDim.size() == 0)
+    return success();
   SmallVector<StateInfo> insertInfo;
   SmallVector<size_t> insertPos;
   auto defaultAttr = builder.getIndexAttr(0);
@@ -430,34 +438,39 @@ LogicalResult PtrState::ExpandInfo(SmallVector<StateInfo> &infoPerDim,
   // use prevDimSize to cache the previous dimension size
   int64_t prevDimSize = 1;
 
-  for(size_t i = 0; i < infoPerDim.size(); i++){
+  for (size_t i = 0; i < infoPerDim.size(); i++) {
     auto staticMask = getIntAttr(infoPerDim[i].mask);
-    assert(staticMask.has_value() && "PtrAnalysis: do not support dymic mask/size");
+    assert(staticMask.has_value() &&
+           "PtrAnalysis: do not support dymic mask/size");
     auto staticShape = getIntAttr(infoPerDim[i].shape);
     auto staticSize = getIntAttr(sizes[infoPerDim[i].dim]);
-    assert(staticPreMask.has_value()  &&
-           staticSize.has_value() && "PtrAnalysis: do not support dymic mask/shape");
+    assert(staticPreMask.has_value() && staticSize.has_value() &&
+           "PtrAnalysis: do not support dymic mask/shape");
 
     // shape=128 stride=33 mask(divval)=256 can not convert to structured access
     // only support (0,128)//x*y,
-    // if (0,128)*y//x can move *y after //x, it will be converted to scene above before this func
-    if(staticMask.value() % staticSize.value() == 0 && staticMask != 0) continue; 
-    if(staticMask.value() == 0 && i != 0){
-      // (0,8)%8 + (0,8)%4 -> [ 0 1 2 3 4 5 6 7 ] + [ 0 1 2 3 0 1 2 3 ]-> Unstruct
-       op->emitRemark(
-            "PtrAnalysis: do not support index % a + index % b in same dim without div");
-        return failure();
+    // if (0,128)*y//x can move *y after //x, it will be converted to scene
+    // above before this func
+    if (staticMask.value() % staticSize.value() == 0 && staticMask != 0)
+      continue;
+    if (staticMask.value() == 0 && i != 0) {
+      // (0,8)%8 + (0,8)%4 -> [ 0 1 2 3 4 5 6 7 ] + [ 0 1 2 3 0 1 2 3 ]->
+      // Unstruct
+      op->emitRemark("PtrAnalysis: do not support index % a + index % b in "
+                     "same dim without div");
+      return failure();
     }
-    if(staticMask.value() % prevDimSize != 0){
-      // (0,8)//2%2 + (0,8)//5 = [0 0 1 1 2 2 3 3] + [0 0 0 0 0 1 1 1] -> mask=5,prevDimSize= 2*2=4 -> unstruct
-      op->emitError(
-            "Unstructured memory access cannot be transformed into an equivalent structured memory access pattern.");
-        return failure();
+    if (staticMask.value() % prevDimSize != 0) {
+      // (0,8)//2%2 + (0,8)//5 = [0 0 1 1 2 2 3 3] + [0 0 0 0 0 1 1 1] ->
+      // mask=5,prevDimSize= 2*2=4 -> unstruct
+      op->emitError("Unstructured memory access cannot be transformed into an "
+                    "equivalent structured memory access pattern.");
+      return failure();
     }
 
-    // (0,8)//4 -> prevDimSize | staticMask && staticMask//prevDimSize > 1 -> has broadcast
-    // (0,8)//4 -> [0,0,0,0,1,1,1,1]
-    if(staticMask.value() / prevDimSize != 1 && staticMask.value() != 0){
+    // (0,8)//4 -> prevDimSize | staticMask && staticMask//prevDimSize > 1 ->
+    // has broadcast (0,8)//4 -> [0,0,0,0,1,1,1,1]
+    if (staticMask.value() / prevDimSize != 1 && staticMask.value() != 0) {
       auto mask = builder.getIndexAttr(prevDimSize);
       auto shape = builder.getIndexAttr(staticMask.value() / prevDimSize);
       StateInfo preInfo(defaultAttr, defaultAttr, shape, mask);
@@ -467,19 +480,22 @@ LogicalResult PtrState::ExpandInfo(SmallVector<StateInfo> &infoPerDim,
     staticPreMask = staticMask;
 
     // after sort, mask will be monotonically increasing,
-    // so that if dim0 compatible with dim1, dim1 compatible with dim2, dim2 also comatible with dim0
-    // we just check previous dim.
-    // ((0, 8) // 2) % 4 ..., preDim = 8 * 2; ((0, 8) % 4) // 2 + ..., preDim = 4
-    prevDimSize = staticShape.value() * ((staticMask.value() == 0 || infoPerDim[i].remIsBeforeDiv) ? 1 : staticMask.value());
+    // so that if dim0 compatible with dim1, dim1 compatible with dim2, dim2
+    // also comatible with dim0 we just check previous dim.
+    // ((0, 8) // 2) % 4 ..., preDim = 8 * 2; ((0, 8) % 4) // 2 + ..., preDim =
+    // 4
+    prevDimSize = staticShape.value() *
+                  ((staticMask.value() == 0 || infoPerDim[i].remIsBeforeDiv)
+                       ? 1
+                       : staticMask.value());
   }
 
-
   assert(insertInfo.size() == insertPos.size());
-  for(size_t i = 0; i < insertInfo.size(); i++){
+  for (size_t i = 0; i < insertInfo.size(); i++) {
     infoPerDim.insert(infoPerDim.begin() + insertPos[i] + i, insertInfo[i]);
   }
 
-  if(this->broadcastIfNeeded(infoPerDim, builder).failed()){
+  if (this->broadcastIfNeeded(infoPerDim, builder).failed()) {
     return failure();
   }
   return success();
@@ -489,8 +505,9 @@ LogicalResult PtrState::addPtrState(const PtrState &lhsState,
                                     const PtrState &rhsState, Operation *op,
                                     OpBuilder &builder) {
 
-  if(lhsState.memAccTy.isUnstructured() || rhsState.memAccTy.isUnstructured()){
-    setMemAccVal( MemAccVal::UnstrucMemAcc);
+  if (lhsState.memAccTy.isUnstructured() ||
+      rhsState.memAccTy.isUnstructured()) {
+    setMemAccVal(MemAccVal::UnstrucMemAcc);
     return success();
   }
 
@@ -512,24 +529,27 @@ LogicalResult PtrState::addPtrState(const PtrState &lhsState,
 
   assert(lhs->source && "Addptr must contain one pointer!");
 
-  if(this->addState(*lhs, *rhs, op, builder).failed()){
+  if (this->addState(*lhs, *rhs, op, builder).failed()) {
     op->emitError("can not merge ptrState and offsetState");
     return failure();
   }
-  
-  // scenario for load(in_ptr + arange(0,1)) ->  pure scalar 
-  if(this->sizes.size()==0){
-    assert(source && scalar && this->getRank()==0 && "this branch only support tl.load(a_ptr + scalar)");
-    
+
+  // scenario for load(in_ptr + arange(0,1)) ->  pure scalar
+  if (this->sizes.size() == 0) {
+    assert(source && scalar && this->getRank() == 0 &&
+           "this branch only support tl.load(a_ptr + scalar)");
+
     auto addptrOp = dyn_cast<triton::AddPtrOp>(op);
-    if(auto resultTensor = dyn_cast<mlir::RankedTensorType>(addptrOp.getResult().getType())){
-      for(size_t i = 0; i < resultTensor.getRank(); ++i){
-        assert(resultTensor.getDimSize(i) == 1 && "In this branch, resultTensor.size must be 1");
+    if (auto resultTensor =
+            dyn_cast<mlir::RankedTensorType>(addptrOp.getResult().getType())) {
+      for (size_t i = 0; i < resultTensor.getRank(); ++i) {
+        assert(resultTensor.getDimSize(i) == 1 &&
+               "In this branch, resultTensor.size must be 1");
         this->sizes.push_back(builder.getIndexAttr(1));
       }
     }
 
-    if(!isa<mlir::RankedTensorType>(addptrOp.getResult().getType())){
+    if (!isa<mlir::RankedTensorType>(addptrOp.getResult().getType())) {
       ptrIsTensor = false;
     }
     return success();
@@ -537,42 +557,46 @@ LogicalResult PtrState::addPtrState(const PtrState &lhsState,
 
   assert(stateInfo.size() && "No information could be analyzed in the state");
 
-  std::sort(stateInfo.begin(), stateInfo.end(), [](const StateInfo& a, const StateInfo& b) {
-    auto staticL = getIntAttr(a.mask);
-    auto staticR = getIntAttr(b.mask);
-    assert(staticL.has_value() && staticR.has_value() && "PtrAnalysis: do not support dymic mask");
-    return a.dim < b.dim || (a.dim == b.dim && staticL.value() < staticR.value());
-  });
+  std::sort(stateInfo.begin(), stateInfo.end(),
+            [](const StateInfo &a, const StateInfo &b) {
+              auto staticL = getIntAttr(a.mask);
+              auto staticR = getIntAttr(b.mask);
+              assert(staticL.has_value() && staticR.has_value() &&
+                     "PtrAnalysis: do not support dymic mask");
+              return a.dim < b.dim ||
+                     (a.dim == b.dim && staticL.value() < staticR.value());
+            });
   this->countDims();
 
   SmallVector<SmallVector<StateInfo>> infoInDifDim;
   size_t startIndex = 0;
-  for(auto lenth : dimLenth){
-    if(lenth == 0)  continue;
-    infoInDifDim.push_back(SmallVector<StateInfo>(stateInfo.begin() + startIndex,
-                                                  stateInfo.begin() + startIndex + lenth));
+  for (auto lenth : dimLenth) {
+    if (lenth == 0)
+      continue;
+    infoInDifDim.push_back(
+        SmallVector<StateInfo>(stateInfo.begin() + startIndex,
+                               stateInfo.begin() + startIndex + lenth));
     startIndex += lenth;
   }
 
-  for(auto &infoPerDim : infoInDifDim){
-    if(this->removeConstDim(infoPerDim, op, builder).failed()){
+  for (auto &infoPerDim : infoInDifDim) {
+    if (this->removeConstDim(infoPerDim, op, builder).failed()) {
       return failure();
     }
-    if(this->ExpandInfo(infoPerDim, op, builder).failed())
+    if (this->ExpandInfo(infoPerDim, op, builder).failed())
       return failure();
   }
 
   this->stateInfo.clear();
 
-  for(auto infoPerDim : infoInDifDim){
+  for (auto infoPerDim : infoInDifDim) {
     // change dim0:{stateInfo[0],stateInfo[1],....}, to decreasing order.
     std::reverse(infoPerDim.begin(), infoPerDim.end());
-    for(auto info : infoPerDim){
+    for (auto info : infoPerDim) {
       this->stateInfo.push_back(info);
     }
   }
   this->countDims();
-
 
   return success();
 }
@@ -580,7 +604,8 @@ LogicalResult PtrState::addPtrState(const PtrState &lhsState,
 LogicalResult PtrState::analyzePermute(SmallVector<StateInfo> &infoPerDim,
                                        Operation *op, OpBuilder &builder) {
   // Consider permute only when rank >= 2
-  if (infoPerDim.size() < 2) return success();
+  if (infoPerDim.size() < 2)
+    return success();
 
   // Require all strides to be static constants and > 0
   SmallVector<int64_t> strides;
@@ -594,14 +619,15 @@ LogicalResult PtrState::analyzePermute(SmallVector<StateInfo> &infoPerDim,
   }
   // Group state information by original dimension. This helps identify
   // which logical dimensions map to the same physical dimension.
-  // 
+  //
   // eg. Input infoPerDim (dim_stride format):
   //     [dim_0_stride_2048, dim_1_stride_8192, dim_1_stride_1]
   // after grouping:
   //     group_0: { dim: 0, idxes: [0], minStride: 2048 }
   //     group_1: { dim: 1, idxes: [1, 2], minStride: 1 }
-  llvm::DenseMap<int32_t, StateInfoGroup> gmap; // Maps original dimension to its group
-  SmallVector<int32_t> dimOrderSeen;         // Preserves first-seen order of dimensions
+  llvm::DenseMap<int32_t, StateInfoGroup>
+      gmap;                          // Maps original dimension to its group
+  SmallVector<int32_t> dimOrderSeen; // Preserves first-seen order of dimensions
   for (size_t i = 0; i < infoPerDim.size(); ++i) {
     size_t d = infoPerDim[i].dim;
     auto it = gmap.find(d);
@@ -621,7 +647,8 @@ LogicalResult PtrState::analyzePermute(SmallVector<StateInfo> &infoPerDim,
   // logicalAxes: 0..rank-1
   SmallVector<int32_t> logicalAxes;
   logicalAxes.reserve(sizes.size());
-  for (int32_t i = 0; i < (int32_t)sizes.size(); ++i) logicalAxes.push_back(i);
+  for (int32_t i = 0; i < (int32_t)sizes.size(); ++i)
+    logicalAxes.push_back(i);
 
   // sort groups by logicalAxes order
   SmallVector<StateInfoGroup> groups;
@@ -637,12 +664,13 @@ LogicalResult PtrState::analyzePermute(SmallVector<StateInfo> &infoPerDim,
     return success();
   }
 
-  std::stable_sort(groups.begin(), groups.end(),
-                  [](const StateInfoGroup &a, const StateInfoGroup &b) {
-                    if (a.minStride != b.minStride) 
-                      return a.minStride > b.minStride; // Sort by stride descending
-                    return a.dim < b.dim; // If strides are equal, sort by dimension
-                  });
+  std::stable_sort(
+      groups.begin(), groups.end(),
+      [](const StateInfoGroup &a, const StateInfoGroup &b) {
+        if (a.minStride != b.minStride)
+          return a.minStride > b.minStride; // Sort by stride descending
+        return a.dim < b.dim; // If strides are equal, sort by dimension
+      });
   // store for later use in sortStateByStride
   stateInfoGroups = groups;
 
@@ -655,19 +683,23 @@ LogicalResult PtrState::analyzePermute(SmallVector<StateInfo> &infoPerDim,
     // std::stable_sort(ordered.begin(), ordered.end(),
     //                  [](const StateInfoGroup* a, const StateInfoGroup* b) {
     //                    if (a->minStride != b->minStride)
-    //                      return a->minStride > b->minStride; // Sort by stride descending
-    //                    return a->dim < b->dim; // If strides are equal, sort by dimension
+    //                      return a->minStride > b->minStride; // Sort by
+    //                      stride descending
+    //                    return a->dim < b->dim; // If strides are equal, sort
+    //                    by dimension
     //                  });
     // // store for later use in sortStateByStride
     // stateInfoGroups = ordered;
     // Collect physical axes in the sorted order
-    for (auto g : groups) physicalAxes.push_back(g.dim);
+    for (auto g : groups)
+      physicalAxes.push_back(g.dim);
   }
 
   // if physicalAxes == logicalAxes, no permute needed
   bool same = (physicalAxes.size() == logicalAxes.size());
   for (size_t i = 0; same && i < logicalAxes.size(); ++i)
-    if (physicalAxes[i] != logicalAxes[i]) same = false;
+    if (physicalAxes[i] != logicalAxes[i])
+      same = false;
   if (same) {
     permute.clear();
     return success();
@@ -675,7 +707,7 @@ LogicalResult PtrState::analyzePermute(SmallVector<StateInfo> &infoPerDim,
 
   // Generate dimension permutation following triton::TransOp convention:
   // out[i] = in[permute[i]] where permute maps logical to physical dimensions
-  // 
+  //
   // Example:
   // logicalAxes: [0, 1] (original order)
   // physicalAxes: [1, 0] (memory layout order)
@@ -690,13 +722,15 @@ LogicalResult PtrState::analyzePermute(SmallVector<StateInfo> &infoPerDim,
 
 LogicalResult PtrState::sortStateByStride(SmallVector<StateInfo> &infoPerDim,
                                           Operation *op, OpBuilder &builder) {
-  if (permute.empty()) return success();
+  if (permute.empty())
+    return success();
 
   SmallVector<int64_t, 16> strides(infoPerDim.size(), -1);
   for (size_t i = 0; i < infoPerDim.size(); ++i) {
     auto s = getIntAttr(infoPerDim[i].stride);
     if (!s.has_value() || s.value() < 0) {
-      LLVM_DEBUG(llvm::dbgs() << "dynamic or invalid stride, skip sortStateByStride\n";);
+      LLVM_DEBUG(llvm::dbgs()
+                     << "dynamic or invalid stride, skip sortStateByStride\n";);
       return failure();
     }
     strides[i] = s.value();
@@ -706,7 +740,8 @@ LogicalResult PtrState::sortStateByStride(SmallVector<StateInfo> &infoPerDim,
   SmallVector<StateInfo> reordered;
   reordered.reserve(infoPerDim.size());
   for (auto &g : stateInfoGroups) {
-    for (size_t idx : g.idxes) reordered.push_back(infoPerDim[idx]);
+    for (size_t idx : g.idxes)
+      reordered.push_back(infoPerDim[idx]);
   }
   infoPerDim.swap(reordered);
   this->countDims();
@@ -721,11 +756,10 @@ LogicalResult PtrState::sortStateByStride(SmallVector<StateInfo> &infoPerDim,
 LogicalResult PtrState::addState(const PtrState &lhsState,
                                  const PtrState &rhsState, Operation *op,
                                  OpBuilder &builder) {
-  
 
   auto loc = op->getLoc();
 
-  if(!lhsState.isLegal() || !rhsState.isLegal()){
+  if (!lhsState.isLegal() || !rhsState.isLegal()) {
     op->emitRemark(
         "PtrAnalysis: Pointer analysis is not supported for input parameters");
     return failure();
@@ -733,7 +767,8 @@ LogicalResult PtrState::addState(const PtrState &lhsState,
 
   assert(isEmpty());
 
-  assert(lhsState.isSameSizeAs(rhsState) && "The original size of the addition should be the same");
+  assert(lhsState.isSameSizeAs(rhsState) &&
+         "The original size of the addition should be the same");
 
   source = lhsState.source ? lhsState.source : rhsState.source;
 
@@ -742,38 +777,40 @@ LogicalResult PtrState::addState(const PtrState &lhsState,
         builder.create<arith::AddIOp>(loc, lhsState.scalar, rhsState.scalar);
     scalar = addOp.getResult();
     sizes = lhsState.sizes;
-    auto leftState = const_cast<PtrState&>(lhsState) ;
-    auto rightState = const_cast<PtrState&>(rhsState) ;
+    auto leftState = const_cast<PtrState &>(lhsState);
+    auto rightState = const_cast<PtrState &>(rhsState);
     this->getMemAccTypeRef().merge(leftState.getMemAccTypeRef());
     this->getMemAccTypeRef().merge(rightState.getMemAccTypeRef());
     return success();
   }
 
-  // (scalar,emptystateInfo) (emptystateInfo,scalar) (scalar,filledStateInfo) (filledStateInfo,scalar)
+  // (scalar,emptystateInfo) (emptystateInfo,scalar) (scalar,filledStateInfo)
+  // (filledStateInfo,scalar)
   if (lhsState.scalar || rhsState.scalar) {
     auto scalarState = lhsState.scalar ? lhsState : rhsState;
     auto normalState = lhsState.scalar ? rhsState : lhsState;
     // scalar is Null and no stateInfo -> is a source ->
-    if (normalState.stateInfo.size() == 0) { 
+    if (normalState.stateInfo.size() == 0) {
       // size = 0 : source + scalar
       scalar = scalarState.scalar;
       sizes = normalState.sizes;
-      auto leftState = const_cast<PtrState&>(lhsState) ;
-      auto rightState = const_cast<PtrState&>(rhsState) ;
+      auto leftState = const_cast<PtrState &>(lhsState);
+      auto rightState = const_cast<PtrState &>(rhsState);
       this->getMemAccTypeRef().merge(leftState.getMemAccTypeRef());
       this->getMemAccTypeRef().merge(rightState.getMemAccTypeRef());
       return success();
-    } 
+    }
 
     auto offset = normalState.stateInfo[0].offset;
 
-    normalState.stateInfo[0].offset = addOFRs(offset, scalarState.scalar, loc, builder);
+    normalState.stateInfo[0].offset =
+        addOFRs(offset, scalarState.scalar, loc, builder);
     stateInfo = normalState.stateInfo;
     sizes = normalState.sizes;
 
   } else if (!lhsState.hasDivision() && !lhsState.hasModulo() &&
-    !rhsState.hasDivision() && !rhsState.hasModulo()) {
-    std::unordered_map<size_t, size_t>  dimIndex;
+             !rhsState.hasDivision() && !rhsState.hasModulo()) {
+    std::unordered_map<size_t, size_t> dimIndex;
     for (uint64_t i = 0; i < lhsState.getRank(); i++) {
       dimIndex[lhsState.stateInfo[i].dim] = i;
     }
@@ -781,23 +818,28 @@ LogicalResult PtrState::addState(const PtrState &lhsState,
       size_t dimId = rhsState.stateInfo[i].dim;
       if (dimIndex.count(dimId)) {
         size_t lhsId = dimIndex[dimId];
-        auto newOffset = addOFRs(lhsState.stateInfo[lhsId].offset, rhsState.stateInfo[i].offset, 
-                                                loc, builder);
-        auto newStride = addOFRs(lhsState.stateInfo[lhsId].stride, rhsState.stateInfo[i].stride,
-                                                    loc, builder);
-        StateInfo newStateInfo(newOffset, newStride, lhsState.stateInfo[lhsId].shape, 
-                                lhsState.stateInfo[lhsId].mask, lhsState.stateInfo[lhsId].dim);
+        auto newOffset = addOFRs(lhsState.stateInfo[lhsId].offset,
+                                 rhsState.stateInfo[i].offset, loc, builder);
+        auto newStride = addOFRs(lhsState.stateInfo[lhsId].stride,
+                                 rhsState.stateInfo[i].stride, loc, builder);
+        StateInfo newStateInfo(
+            newOffset, newStride, lhsState.stateInfo[lhsId].shape,
+            lhsState.stateInfo[lhsId].mask, lhsState.stateInfo[lhsId].dim);
         // Synchronize dimOffset when adding two StateInfo
         // dimOffset should reflect the same addition operation as offset
-        if (lhsState.stateInfo[lhsId].dimOffset && rhsState.stateInfo[i].dimOffset) {
-          newStateInfo.dimOffset = addOFRs(lhsState.stateInfo[lhsId].dimOffset,
-                                           rhsState.stateInfo[i].dimOffset, loc, builder);
+        if (lhsState.stateInfo[lhsId].dimOffset &&
+            rhsState.stateInfo[i].dimOffset) {
+          newStateInfo.dimOffset =
+              addOFRs(lhsState.stateInfo[lhsId].dimOffset,
+                      rhsState.stateInfo[i].dimOffset, loc, builder);
         } else if (lhsState.stateInfo[lhsId].dimOffset) {
-          newStateInfo.dimOffset = addOFRs(lhsState.stateInfo[lhsId].dimOffset,
-                                           rhsState.stateInfo[i].offset, loc, builder);
+          newStateInfo.dimOffset =
+              addOFRs(lhsState.stateInfo[lhsId].dimOffset,
+                      rhsState.stateInfo[i].offset, loc, builder);
         } else if (rhsState.stateInfo[i].dimOffset) {
-          newStateInfo.dimOffset = addOFRs(lhsState.stateInfo[lhsId].offset,
-                                           rhsState.stateInfo[i].dimOffset, loc, builder);
+          newStateInfo.dimOffset =
+              addOFRs(lhsState.stateInfo[lhsId].offset,
+                      rhsState.stateInfo[i].dimOffset, loc, builder);
         }
         this->stateInfo.push_back(newStateInfo);
         dimIndex.erase(dimId);
@@ -808,30 +850,31 @@ LogicalResult PtrState::addState(const PtrState &lhsState,
     for (auto [_, lhsId] : dimIndex) {
       this->stateInfo.push_back(lhsState.stateInfo[lhsId]);
     }
- 
+
     this->sizes = lhsState.sizes;
-  }else{
-    // In addptrState, we add stride=0 dimensions. 
-    // For consecutive addptr calls, remove previous call's extra stride=0 dimensions. 
-    // Scalar handling ensures no stride=0 dimensions in this branch. 
+  } else {
+    // In addptrState, we add stride=0 dimensions.
+    // For consecutive addptr calls, remove previous call's extra stride=0
+    // dimensions. Scalar handling ensures no stride=0 dimensions in this
+    // branch.
 
     // offset = range(0, 8) % 2
-    // ptr1 = src + offset # addptrstate adds stride=0 dimension -> size [4,2], strides [0,1] 
-    // ptr2 = ptr1 + range(0, 8) // 2 * 2
-    // load(ptr2)
+    // ptr1 = src + offset # addptrstate adds stride=0 dimension -> size [4,2],
+    // strides [0,1] ptr2 = ptr1 + range(0, 8) // 2 * 2 load(ptr2)
     for (auto info : lhsState.stateInfo) {
-      if (opFoldResultIsZero(info.stride))  continue;
+      if (opFoldResultIsZero(info.stride))
+        continue;
       this->stateInfo.push_back(info);
     }
     for (auto info : rhsState.stateInfo) {
-      if (opFoldResultIsZero(info.stride))  continue;
+      if (opFoldResultIsZero(info.stride))
+        continue;
       this->stateInfo.push_back(info);
     }
     this->sizes = rhsState.sizes;
-    
   }
-  auto leftState = const_cast<PtrState&>(lhsState) ;
-  auto rightState = const_cast<PtrState&>(rhsState) ;
+  auto leftState = const_cast<PtrState &>(lhsState);
+  auto rightState = const_cast<PtrState &>(rhsState);
   this->getMemAccTypeRef().merge(leftState.getMemAccTypeRef());
   this->getMemAccTypeRef().merge(rightState.getMemAccTypeRef());
 
@@ -846,12 +889,13 @@ LogicalResult PtrState::mulState(const PtrState &lhsState,
   // neither lhs nor rhs should have source, since multiplying base pointer
   // does not make sense
   if (lhsState.hasSource() && rhsState.hasSource()) {
-    op->emitRemark("PtrAnalysis: do not support both sides have base inters in multiplying");
+    op->emitRemark("PtrAnalysis: do not support both sides have base inters in "
+                   "multiplying");
     return failure();
   }
   assert(isEmpty() && lhsState.isSameSizeAs(rhsState));
 
-  if(lhsState.scalar && rhsState.scalar){
+  if (lhsState.scalar && rhsState.scalar) {
     auto mulOp =
         builder.create<arith::MulIOp>(loc, lhsState.scalar, rhsState.scalar);
     this->scalar = mulOp.getResult();
@@ -872,12 +916,15 @@ LogicalResult PtrState::mulState(const PtrState &lhsState,
     std::swap(lhs, rhs);
   }
 
-  for(auto info : lhs->stateInfo){
+  for (auto info : lhs->stateInfo) {
     // StateInfo newStateInfo;
-    OpFoldResult newOffset = mulOFRValue(info.offset, rhs->scalar, loc, builder);
-    OpFoldResult newStride = mulOFRValue(info.stride, rhs->scalar, loc, builder);
+    OpFoldResult newOffset =
+        mulOFRValue(info.offset, rhs->scalar, loc, builder);
+    OpFoldResult newStride =
+        mulOFRValue(info.stride, rhs->scalar, loc, builder);
 
-    StateInfo newStateInfo(newOffset, newStride, info.shape, info.mask, info.dim);
+    StateInfo newStateInfo(newOffset, newStride, info.shape, info.mask,
+                           info.dim);
     newStateInfo.dimOffset = info.dimOffset ? info.dimOffset : info.offset;
     newStateInfo.remIsBeforeDiv = info.remIsBeforeDiv;
 
@@ -885,48 +932,50 @@ LogicalResult PtrState::mulState(const PtrState &lhsState,
     if (info.hasModulo()) {
       auto value = newStateInfo.dimOffset.dyn_cast<Value>();
       auto remop = value.getDefiningOp<arith::RemSIOp>();
-      if(remop) {
-        auto lhs = remop.getLhs() ;
+      if (remop) {
+        auto lhs = remop.getLhs();
         auto constLOp = lhs.getDefiningOp<arith::ConstantOp>();
-        auto rhs = remop.getRhs() ;
+        auto rhs = remop.getRhs();
         auto constROp = rhs.getDefiningOp<arith::ConstantOp>();
         if (!constLOp || !constROp) {
-          continue ;
+          continue;
         }
 
-        auto staticOffset = getIntAttr(constLOp.getValue()) ;
-        auto staticDivisor = getIntAttr(constROp.getValue()) ;
-        auto staticShape = getIntAttr(info.shape) ;
-    
+        auto staticOffset = getIntAttr(constLOp.getValue());
+        auto staticDivisor = getIntAttr(constROp.getValue());
+        auto staticShape = getIntAttr(info.shape);
+
         if ((staticOffset.value() % staticShape.value() != 0) ||
-                         !((staticShape.value() % staticDivisor.value() == 0) || (staticDivisor.value() % staticShape.value() == 0 ))) {
-          setMemAccVal( MemAccVal::Fallback);
-        } 
+            !((staticShape.value() % staticDivisor.value() == 0) ||
+              (staticDivisor.value() % staticShape.value() == 0))) {
+          setMemAccVal(MemAccVal::Fallback);
+        }
       }
     } else if (info.hasDivision()) {
       auto value = newStateInfo.dimOffset.dyn_cast<Value>();
       auto divop = value.getDefiningOp<arith::DivSIOp>();
-      if(divop) {
-        auto lhs = divop.getLhs() ;
+      if (divop) {
+        auto lhs = divop.getLhs();
         auto constLOp = lhs.getDefiningOp<arith::ConstantOp>();
-        auto rhs = divop.getRhs() ;
+        auto rhs = divop.getRhs();
         auto constROp = rhs.getDefiningOp<arith::ConstantOp>();
         if (!constLOp || !constROp) {
-          continue ;
+          continue;
         }
 
-        auto staticOffset = getIntAttr(constLOp.getValue()) ;
-        auto staticDivisor = getIntAttr(constROp.getValue()) ;
-        auto staticShape = getIntAttr(info.shape) ;
-    
+        auto staticOffset = getIntAttr(constLOp.getValue());
+        auto staticDivisor = getIntAttr(constROp.getValue());
+        auto staticShape = getIntAttr(info.shape);
+
         if ((staticOffset.value() % staticShape.value() != 0) ||
-                         !((staticShape.value() % staticDivisor.value() == 0) || (staticDivisor.value() % staticShape.value() == 0))) {
-          setMemAccVal( MemAccVal::Fallback);
-        } 
+            !((staticShape.value() % staticDivisor.value() == 0) ||
+              (staticDivisor.value() % staticShape.value() == 0))) {
+          setMemAccVal(MemAccVal::Fallback);
+        }
       }
     }
   }
-  
+
   sizes = lhs->sizes;
 
   if (rhs->hasModulo()) {
@@ -936,8 +985,8 @@ LogicalResult PtrState::mulState(const PtrState &lhsState,
     return failure();
   }
 
-  auto leftState = const_cast<PtrState&>(lhsState) ;
-  auto rightState = const_cast<PtrState&>(rhsState) ;
+  auto leftState = const_cast<PtrState &>(lhsState);
+  auto rightState = const_cast<PtrState &>(rhsState);
   this->getMemAccTypeRef().merge(leftState.getMemAccTypeRef());
   this->getMemAccTypeRef().merge(rightState.getMemAccTypeRef());
   return success();
@@ -946,7 +995,7 @@ LogicalResult PtrState::mulState(const PtrState &lhsState,
 LogicalResult PtrState::subState(const PtrState &lhsState,
                                  const PtrState &rhsState, Operation *op,
                                  OpBuilder &builder) {
-  
+
   assert(isEmpty() && lhsState.isSameSizeAs(rhsState));
 
   auto loc = op->getLoc();
@@ -954,36 +1003,36 @@ LogicalResult PtrState::subState(const PtrState &lhsState,
   // does not make sense
 
   if (lhsState.hasSource() && rhsState.hasSource()) {
-    op->emitRemark("PtrAnalysis: do not support both sides have base inters in sub");
+    op->emitRemark(
+        "PtrAnalysis: do not support both sides have base inters in sub");
     return failure();
   }
 
-  if(lhsState.scalar && rhsState.scalar){
+  if (lhsState.scalar && rhsState.scalar) {
     auto subOp =
         builder.create<arith::SubIOp>(loc, lhsState.scalar, rhsState.scalar);
     this->scalar = subOp.getResult();
   } else {
     // currently do not support right tensors are effectively non-scalar
     if (!rhsState.scalar) {
-      op->emitRemark(
-          "PtrAnalysis: only support sub when one of "
-          "them represent a scalar");
+      op->emitRemark("PtrAnalysis: only support sub when one of "
+                     "them represent a scalar");
       return failure();
     }
 
     sizes = lhsState.sizes;
     assert(!lhsState.stateInfo.empty() && "non-scalar should have stateInfo");
     stateInfo = lhsState.stateInfo;
-    stateInfo[0].offset = subOFRs(stateInfo[0].offset, rhsState.scalar, loc, builder);
+    stateInfo[0].offset =
+        subOFRs(stateInfo[0].offset, rhsState.scalar, loc, builder);
   }
 
-  auto leftState = const_cast<PtrState&>(lhsState) ;
-  auto rightState = const_cast<PtrState&>(rhsState) ;
+  auto leftState = const_cast<PtrState &>(lhsState);
+  auto rightState = const_cast<PtrState &>(rhsState);
   this->getMemAccTypeRef().merge(leftState.getMemAccTypeRef());
   this->getMemAccTypeRef().merge(rightState.getMemAccTypeRef());
   return success();
 }
-
 
 LogicalResult PtrAnalysis::visitOperandAdd(arith::AddIOp addOp, PtrState &state,
                                            const Location loc,
@@ -996,7 +1045,6 @@ LogicalResult PtrAnalysis::visitOperandAdd(arith::AddIOp addOp, PtrState &state,
   PtrState rhsState;
   if (visitOperand(addOp.getRhs(), rhsState, loc, builder).failed())
     return failure();
-
 
   return state.addState(lhsState, rhsState, addOp, builder);
 }
@@ -1037,7 +1085,7 @@ LogicalResult PtrAnalysis::visitOperandDiv(arith::DivSIOp divOp,
                                            PtrState &state, const Location loc,
                                            OpBuilder &builder) {
   assert(state.isEmpty());
-  LLVM_DEBUG({llvm::dbgs() << "before VisitDivOperands \n";});
+  LLVM_DEBUG({ llvm::dbgs() << "before VisitDivOperands \n"; });
   state.dump();
 
   PtrState rhsState;
@@ -1055,7 +1103,7 @@ LogicalResult PtrAnalysis::visitOperandDiv(arith::DivSIOp divOp,
     return failure();
   }
 
-  if(state.scalar){
+  if (state.scalar) {
     auto divOp =
         builder.create<arith::DivSIOp>(loc, state.scalar, rhsState.scalar);
     state.scalar = divOp.getResult();
@@ -1063,13 +1111,14 @@ LogicalResult PtrAnalysis::visitOperandDiv(arith::DivSIOp divOp,
   }
 
   auto maskop = rhsState.scalar.getDefiningOp<arith::ConstantOp>();
-  if(!maskop){
-    divOp->emitError("Static compilation cannot determine the value of this parameter");
+  if (!maskop) {
+    divOp->emitError(
+        "Static compilation cannot determine the value of this parameter");
     return failure();
   }
 
   auto staticMask = cast<IntegerAttr>(maskop.getValue()).getInt();
-  for(auto &info : state.stateInfo){
+  for (auto &info : state.stateInfo) {
     auto staticSize = getIntAttr(state.sizes[info.dim]);
     auto staticStride = getIntAttr(info.stride);
     auto staticShape = getIntAttr(info.shape);
@@ -1081,7 +1130,7 @@ LogicalResult PtrAnalysis::visitOperandDiv(arith::DivSIOp divOp,
 
     assert(staticShape.has_value() && preMask.has_value());
 
-    if(staticStride.has_value() && staticStride.value() % staticMask == 0){
+    if (staticStride.has_value() && staticStride.value() % staticMask == 0) {
       info.stride = builder.getIndexAttr(staticStride.value() / staticMask);
       auto newOffset = divOFRs(info.offset, rhsState.scalar, loc, builder);
       info.offset = newOffset;
@@ -1089,15 +1138,15 @@ LogicalResult PtrAnalysis::visitOperandDiv(arith::DivSIOp divOp,
       return success();
     }
 
-    if(preMask.value() != 0){
-      if(staticStride.has_value() && staticMask % staticStride.value() == 0 && staticShape.value() % staticSize.value() == 0){
+    if (preMask.value() != 0) {
+      if (staticStride.has_value() && staticMask % staticStride.value() == 0 &&
+          staticShape.value() % staticSize.value() == 0) {
         info.mask = builder.getIndexAttr(staticMask / staticStride.value());
-      }else{
-        divOp->emitError(
-        "PtrAnalysis: do not support division after div.");
+      } else {
+        divOp->emitError("PtrAnalysis: do not support division after div.");
         return failure();
       }
-    }else{
+    } else {
       info.mask = builder.getIndexAttr(staticMask);
     }
     auto newOffset = divOFRs(info.offset, rhsState.scalar, loc, builder);
@@ -1106,7 +1155,7 @@ LogicalResult PtrAnalysis::visitOperandDiv(arith::DivSIOp divOp,
     info.dimOffset = newOffset;
   }
 
-  LLVM_DEBUG({llvm::dbgs() << "after VisitDivOperands \n";});
+  LLVM_DEBUG({ llvm::dbgs() << "after VisitDivOperands \n"; });
   state.dump();
 
   return success();
@@ -1116,7 +1165,7 @@ LogicalResult PtrAnalysis::visitOperandRem(arith::RemSIOp remOp,
                                            PtrState &state, const Location loc,
                                            OpBuilder &builder) {
   assert(state.isEmpty());
-  LLVM_DEBUG({llvm::dbgs() << "before VisitRemOperands \n";});
+  LLVM_DEBUG({ llvm::dbgs() << "before VisitRemOperands \n"; });
   state.dump();
 
   PtrState rhsState;
@@ -1134,7 +1183,7 @@ LogicalResult PtrAnalysis::visitOperandRem(arith::RemSIOp remOp,
     return failure();
   }
 
-  if(state.scalar){
+  if (state.scalar) {
     auto RemOp =
         builder.create<arith::RemSIOp>(loc, state.scalar, rhsState.scalar);
     state.scalar = remOp.getResult();
@@ -1142,43 +1191,46 @@ LogicalResult PtrAnalysis::visitOperandRem(arith::RemSIOp remOp,
   }
 
   auto remsiop = rhsState.scalar.getDefiningOp<arith::ConstantOp>();
-  if(!remsiop){
-    remOp->emitError("Static compilation cannot determine the value of this parameter");
+  if (!remsiop) {
+    remOp->emitError(
+        "Static compilation cannot determine the value of this parameter");
     return failure();
   }
 
   auto staticShape = cast<IntegerAttr>(remsiop.getValue()).getInt();
-  for(auto &info : state.stateInfo){
+  for (auto &info : state.stateInfo) {
     auto staticStride = getIntAttr(info.stride);
     auto preShape = getIntAttr(info.shape);
     auto staticMask = getIntAttr(info.mask);
 
     assert(preShape.has_value() && staticMask.has_value());
 
-    if(!staticStride.has_value()){
+    if (!staticStride.has_value()) {
       remOp->emitError(
-        "PtrAnalysis: do not support dynamimx stride before remsi.");
-        return failure();
-    }else if(staticStride.value() % staticShape == 0) {
+          "PtrAnalysis: do not support dynamimx stride before remsi.");
+      return failure();
+    } else if (staticStride.value() % staticShape == 0) {
       info.stride = builder.getIndexAttr(0);
-    }else if(staticShape % staticStride.value() != 0){
-      remOp->emitError(
-        "PtrAnalysis: do not support remsi after mul.");
-        return failure();
+    } else if (staticShape % staticStride.value() != 0) {
+      remOp->emitError("PtrAnalysis: do not support remsi after mul.");
+      return failure();
     }
 
     if (preShape.value() != 0) {
-      if (staticStride.has_value() && preShape.value() % staticShape == 0 && staticShape % staticStride.value() == 0) {
+      if (staticStride.has_value() && preShape.value() % staticShape == 0 &&
+          staticShape % staticStride.value() == 0) {
         info.shape = builder.getIndexAttr(staticShape / staticStride.value());
-      } else if ((staticShape % preShape.value() == 0 || preShape.value() % staticShape == 0)
-                  && staticStride.has_value()&& staticStride.value() == 1) {
-        info.shape = builder.getIndexAttr(std::min(staticShape, preShape.value()));
-      } else{
-        remOp->emitError(
-        "PtrAnalysis: do not support remsi after remsi.");
+      } else if ((staticShape % preShape.value() == 0 ||
+                  preShape.value() % staticShape == 0) &&
+                 staticStride.has_value() && staticStride.value() == 1) {
+        info.shape =
+            builder.getIndexAttr(std::min(staticShape, preShape.value()));
+      } else {
+        remOp->emitError("PtrAnalysis: do not support remsi after remsi.");
         return failure();
       }
-    } else if (staticStride.has_value() && staticShape % staticStride.value() == 0) {
+    } else if (staticStride.has_value() &&
+               staticShape % staticStride.value() == 0) {
       info.shape = builder.getIndexAttr(staticShape / staticStride.value());
     } else {
       info.shape = builder.getIndexAttr(staticShape);
@@ -1188,7 +1240,7 @@ LogicalResult PtrAnalysis::visitOperandRem(arith::RemSIOp remOp,
     info.offset = newOffset;
     info.dimOffset = newOffset;
   }
-  LLVM_DEBUG({llvm::dbgs() << "after VisitRemOperands \n";});
+  LLVM_DEBUG({ llvm::dbgs() << "after VisitRemOperands \n"; });
   state.dump();
   return success();
 }
@@ -1200,7 +1252,7 @@ LogicalResult PtrAnalysis::visitOperandExtSI(arith::ExtSIOp extOp,
   assert(state.isEmpty());
 
   auto srcType = extOp.getIn().getType();
-  if(visitOperand(extOp.getIn(), state, loc, builder).failed()){
+  if (visitOperand(extOp.getIn(), state, loc, builder).failed()) {
     return failure();
   }
 
@@ -1250,13 +1302,15 @@ PtrAnalysis::visitOperandExpandDims(triton::ExpandDimsOp expandDimsOp,
 
   if (axis > state.sizes.size()) {
     LLVM_DEBUG({
-      llvm::dbgs() << "[Linearize] expand_dims axis is out of bounds for pointer state sizes\n";
+      llvm::dbgs() << "[Linearize] expand_dims axis is out of bounds for "
+                      "pointer state sizes\n";
     });
     return failure();
   }
 
-  for (auto& info : state.stateInfo){
-    if(info.dim >= axis)  ++info.dim;
+  for (auto &info : state.stateInfo) {
+    if (info.dim >= axis)
+      ++info.dim;
   }
 
   state.sizes.insert(state.sizes.begin() + axis, builder.getIndexAttr(1));
@@ -1289,11 +1343,12 @@ PtrAnalysis::visitOperandBroadcast(triton::BroadcastOp broadcastOp,
   }
 
   if (srcShape.size() == 1 && srcShape[0] == 1) {
-    StateInfo newStateInfo(defaultAttr, defaultAttr, defaultAttr, defaultAttr, 0);
+    StateInfo newStateInfo(defaultAttr, defaultAttr, defaultAttr, defaultAttr,
+                           0);
     state.stateInfo.push_back(newStateInfo);
     state.sizes.push_back(builder.getIndexAttr(1));
   }
-  if(state.sizes.empty()){
+  if (state.sizes.empty()) {
     for (size_t i = 0; i < dstShape.size(); i++) {
       state.sizes.push_back(builder.getIndexAttr(dstShape[i]));
     }
@@ -1325,7 +1380,7 @@ LogicalResult PtrAnalysis::visitOperandSplat(triton::SplatOp splatOp,
     return failure();
   }
 
-  if(isa<IntegerType, IndexType, triton::PointerType>(src.getType())){
+  if (isa<IntegerType, IndexType, triton::PointerType>(src.getType())) {
     for (size_t i = 0; i < dstShape.size(); ++i) {
       state.sizes.push_back(builder.getIndexAttr(dstShape[i]));
     }
@@ -1334,8 +1389,7 @@ LogicalResult PtrAnalysis::visitOperandSplat(triton::SplatOp splatOp,
     return failure();
   }
 
-
-  // fixme, kaixin, this does not seem reasonable , shoud be removed 
+  // fixme, kaixin, this does not seem reasonable , shoud be removed
   if (state.hasModulo() && state.getRank() > 2) {
     LLVM_DEBUG({
       llvm::dbgs() << "visitOperandSplat failed\n";
@@ -1376,8 +1430,8 @@ LogicalResult PtrAnalysis::visitOperandAddptr(triton::AddPtrOp addptrOp,
   });
 
   if (!ptrState.source) {
-      addptrOp->emitError("ptr field should provide source / base pointer");
-      return failure();
+    addptrOp->emitError("ptr field should provide source / base pointer");
+    return failure();
   }
 
   // offset has source means offset is from tl.load and other ops(TODO)
@@ -1385,7 +1439,6 @@ LogicalResult PtrAnalysis::visitOperandAddptr(triton::AddPtrOp addptrOp,
     ptrState.setMemAccTy(offsetState.getMemAccType());
     offsetState.removeSource();
   }
-
 
   return state.addPtrState(ptrState, offsetState, addptrOp, builder);
 }
@@ -1417,7 +1470,6 @@ LogicalResult PtrAnalysis::visitOperandConstSplat(arith::ConstantOp op,
   return success();
 }
 
-
 LogicalResult PtrAnalysis::visitOperandForOp(scf::ForOp forOp, Value operand,
                                              PtrState &state,
                                              const Location loc,
@@ -1439,10 +1491,9 @@ LogicalResult PtrAnalysis::visitOperandForOp(scf::ForOp forOp, Value operand,
 }
 
 template <typename OpTy>
-LogicalResult PtrAnalysis::visitOperandIndirectLoad(OpTy op,
-                                      PtrState &state,
-                                      const Location &loc,
-                                      OpBuilder &builder) {
+LogicalResult PtrAnalysis::visitOperandIndirectLoad(OpTy op, PtrState &state,
+                                                    const Location &loc,
+                                                    OpBuilder &builder) {
   // FIXME: assume single result of operation
   auto opRes = op->getResult(0);
   auto opResTy = opRes.getType();
@@ -1450,7 +1501,7 @@ LogicalResult PtrAnalysis::visitOperandIndirectLoad(OpTy op,
   if (auto shapedResTy = dyn_cast<ShapedType>(opResTy)) {
     // For now, we consider this is UnstrucMemAcc because we have no other info.
     // Visiting other ops may change the type due to more info.
-    state.setMemAccVal( MemAccVal::UnstrucMemAcc);
+    state.setMemAccVal(MemAccVal::UnstrucMemAcc);
     resShape = shapedResTy.getShape().vec();
   } else {
     // scalar load means this is used as offset. It is StrucMemAcc.
@@ -1459,20 +1510,20 @@ LogicalResult PtrAnalysis::visitOperandIndirectLoad(OpTy op,
   }
 
   auto defaultAttr = builder.getIndexAttr(0);
-  auto count = 0 ;
+  auto count = 0;
   for (auto &s : resShape) {
-     auto offset = builder.getIndexAttr(0);
-     auto stride = builder.getIndexAttr(1);
-     auto shape = builder.getIndexAttr(s);
-     StateInfo newStateInfo(offset, stride,  builder.getIndexAttr(0), defaultAttr, count++);
-     state.stateInfo.push_back(newStateInfo);
-     state.sizes.push_back(shape);
+    auto offset = builder.getIndexAttr(0);
+    auto stride = builder.getIndexAttr(1);
+    auto shape = builder.getIndexAttr(s);
+    StateInfo newStateInfo(offset, stride, builder.getIndexAttr(0), defaultAttr,
+                           count++);
+    state.stateInfo.push_back(newStateInfo);
+    state.sizes.push_back(shape);
   }
   // set the source in BlockData so that we know an indirect-load op exists in
   // the chain.
-  state.source = opRes ;
+  state.source = opRes;
   return success();
-
 }
 
 LogicalResult PtrAnalysis::visitOperand(Value operand, PtrState &state,
@@ -1496,7 +1547,9 @@ LogicalResult PtrAnalysis::visitOperand(Value operand, PtrState &state,
   } else if (isa<IndexType>(operand.getType())) {
     state.scalar = operand;
     return success();
-  } else if(isa<RankedTensorType>(operand.getType()) && cast<ShapedType>(operand.getType()).getShape().size() == 1 && cast<ShapedType>(operand.getType()).getShape()[0] == 1){
+  } else if (isa<RankedTensorType>(operand.getType()) &&
+             cast<ShapedType>(operand.getType()).getShape().size() == 1 &&
+             cast<ShapedType>(operand.getType()).getShape()[0] == 1) {
     state.scalar = operand;
     return success();
   }
@@ -1508,12 +1561,12 @@ LogicalResult PtrAnalysis::visitOperand(Value operand, PtrState &state,
       if (auto addPtrOp = dyn_cast<triton::AddPtrOp>(op)) {
         return visitOperandAddptr(cast<triton::AddPtrOp>(op), state, loc,
                                   builder);
-      } else if (auto bitCastOp = dyn_cast<triton::BitcastOp>(op)){
+      } else if (auto bitCastOp = dyn_cast<triton::BitcastOp>(op)) {
         state.source = operand;
         return success();
       } else if (auto makeTensorOp = dyn_cast<triton::MakeTensorPtrOp>(op)) {
         llvm_unreachable("Unexpected operand defining operation tts.make_tptr");
-      } else if (auto intToPtrOp = dyn_cast<triton::IntToPtrOp>(op)){
+      } else if (auto intToPtrOp = dyn_cast<triton::IntToPtrOp>(op)) {
         state.source = operand;
         return success();
       } else {
@@ -1527,16 +1580,17 @@ LogicalResult PtrAnalysis::visitOperand(Value operand, PtrState &state,
 
   auto tensorType = dyn_cast<mlir::RankedTensorType>(operand.getType());
   bool isScalar = true;
-  for(size_t i = 0; i < tensorType.getRank() && isScalar; ++i){
+  for (size_t i = 0; i < tensorType.getRank() && isScalar; ++i) {
     isScalar = tensorType.getDimSize(i) == 1;
   }
-  if(isScalar){
+  if (isScalar) {
     auto index = builder.create<mlir::arith::ConstantIndexOp>(loc, 0);
     SmallVector<mlir::Value> indices;
-    for(size_t i = 0; i < tensorType.getRank() && isScalar; ++i){
+    for (size_t i = 0; i < tensorType.getRank() && isScalar; ++i) {
       indices.push_back(index);
     }
-    auto extractedElement = builder.create<mlir::tensor::ExtractOp>(loc, operand, indices);
+    auto extractedElement =
+        builder.create<mlir::tensor::ExtractOp>(loc, operand, indices);
     state.scalar = extractedElement.getResult();
     return success();
   }
@@ -1570,20 +1624,23 @@ LogicalResult PtrAnalysis::visitOperand(Value operand, PtrState &state,
   } else if (auto op = operand.getDefiningOp<scf::WhileOp>()) {
     return visitOperandWhileOp(op, operand, state, loc, builder);
   } else if (auto op = operand.getDefiningOp<triton::LoadOp>()) {
-    return visitOperandIndirectLoad(op, state, loc, builder) ;
+    return visitOperandIndirectLoad(op, state, loc, builder);
     // op->emitError("PtrAnalysis: Invalid dynamic offset"
-    //               "The load operation's offset cannot be derived from another load result.");
+    //               "The load operation's offset cannot be derived from another
+    //               load result.");
     // operand.dump();
     return failure();
   } else if (auto op = operand.getDefiningOp<arith::FPToSIOp>()) {
-    return visitOperandIndirectLoad(op, state, loc, builder) ;
+    return visitOperandIndirectLoad(op, state, loc, builder);
     // op->emitError("IllegalTypeConversionInAddressCalculation"
-    //               "float-to-int precision conversion is not supported during address computation.");
+    //               "float-to-int precision conversion is not supported during
+    //               address computation.");
     // operand.dump();
     return failure();
   } else if (!operand.getDefiningOp()) {
     if (!knownPtrs.contains(operand)) {
-      llvm::dbgs() << "PtrAnalysis: Pointer analysis is not supported for input parameters\n";
+      llvm::dbgs() << "PtrAnalysis: Pointer analysis is not supported for "
+                      "input parameters\n";
       return failure();
     }
 
@@ -1594,62 +1651,75 @@ LogicalResult PtrAnalysis::visitOperand(Value operand, PtrState &state,
     return success();
   } else {
     auto op = operand.getDefiningOp();
-    op->emitError("PtrAnalysis: encountered addptr operand produced by an unsupported operation");
+    op->emitError("PtrAnalysis: encountered addptr operand produced by an "
+                  "unsupported operation");
     operand.dump();
     return failure();
   }
 }
 
-triton::AddPtrOp PtrState::createAddPtrOp(OpBuilder &builder, Location loc){
+triton::AddPtrOp PtrState::createAddPtrOp(OpBuilder &builder, Location loc) {
   SmallVector<int64_t> tensorSizes;
   SmallVector<OpFoldResult> tensorStrides;
   SmallVector<OpFoldResult> tensorOffsets;
-  SmallVector<OpFoldResult> tensorShape; // compare mode: only 0/1
+  SmallVector<OpFoldResult> tensorShape;     // compare mode: only 0/1
   SmallVector<OpFoldResult> tensorDimOffset; // use for dimVar
-  
+
   auto ptrType = cast<triton::PointerType>(source.getType());
-  LLVM_DEBUG({llvm::dbgs() << "before createAddptr dump ptrState:\n";});
+  LLVM_DEBUG({ llvm::dbgs() << "before createAddptr dump ptrState:\n"; });
   this->dump();
- 
+
   // [BEG] changed
-  for(auto info : stateInfo){
-    auto staticMask = getIntAttr(info.mask); // div rhs
+  for (auto info : stateInfo) {
+    auto staticMask = getIntAttr(info.mask);   // div rhs
     auto staticShape = getIntAttr(info.shape); // mod rhs
     auto staticSize = getIntAttr(sizes[info.dim]);
     auto staticStride = getIntAttr(info.stride);
 
-    assert(staticSize.has_value() && "PtrAnalysis: do not support dynamic size");
+    assert(staticSize.has_value() &&
+           "PtrAnalysis: do not support dynamic size");
 
-    if(staticMask.has_value() && staticShape.has_value() ){
-      if(staticStride.has_value() && staticStride == 0) continue;
+    if (staticMask.has_value() && staticShape.has_value()) {
+      if (staticStride.has_value() && staticStride == 0)
+        continue;
       // when rem after div:
       // range(0, 8) // 4 -> div_size = (8 - 1) // 4 + 1 = 2
       // but if rem before div:
       // (range(0, 8) % 4) // 4 -> div_size = (4 - 1) // 4 + 1 = 1
-      int64_t divDim = staticMask.value() ? ((info.remIsBeforeDiv ? staticShape.value() : staticSize.value()) - 1) / staticMask.value() + 1 : staticSize.value();
-      int64_t remsiDim = staticShape.value() ? staticShape.value() : staticSize.value();
+      int64_t divDim = staticMask.value()
+                           ? ((info.remIsBeforeDiv ? staticShape.value()
+                                                   : staticSize.value()) -
+                              1) / staticMask.value() +
+                                 1
+                           : staticSize.value();
+      int64_t remsiDim =
+          staticShape.value() ? staticShape.value() : staticSize.value();
       int64_t trueDim = std::min(divDim, remsiDim);
       tensorSizes.push_back(trueDim);
-    }else {
+    } else {
       tensorSizes.push_back(staticSize.value());
     }
-    tensorShape.push_back(builder.getIndexAttr(0)); // after this, tensorShape express maskmode <|>
+    tensorShape.push_back(builder.getIndexAttr(
+        0)); // after this, tensorShape express maskmode <|>
     tensorStrides.push_back(info.stride);
     tensorOffsets.push_back(info.offset);
-    tensorDimOffset.push_back(info.dimOffset?info.dimOffset:info.offset);
+    tensorDimOffset.push_back(info.dimOffset ? info.dimOffset : info.offset);
   }
 
-  if(this->scalar){ // isa pure scalar || isa splated scalar 
-    assert(this->stateInfo.size()==0 && "scalar and stateInfo can not exist at same time.");
+  if (this->scalar) { // isa pure scalar || isa splated scalar
+    assert(this->stateInfo.size() == 0 &&
+           "scalar and stateInfo can not exist at same time.");
     if (this->sizes.size()) { // splated scalar
-      for(auto [i, sz] : llvm::enumerate(this->sizes)){
+      for (auto [i, sz] : llvm::enumerate(this->sizes)) {
         tensorSizes.push_back(getIntAttr(sz).value());
         tensorShape.push_back(builder.getIndexAttr(0));
         tensorStrides.push_back(builder.getIndexAttr(1));
-        i?tensorOffsets.push_back(builder.getIndexAttr(0)):tensorOffsets.push_back(this->scalar);
-        i?tensorDimOffset.push_back(builder.getIndexAttr(0)):tensorDimOffset.push_back(this->scalar);
+        i ? tensorOffsets.push_back(builder.getIndexAttr(0))
+          : tensorOffsets.push_back(this->scalar);
+        i ? tensorDimOffset.push_back(builder.getIndexAttr(0))
+          : tensorDimOffset.push_back(this->scalar);
       }
-    } else { //pure scalar
+    } else { // pure scalar
       tensorSizes.push_back(1);
       tensorShape.push_back(builder.getIndexAttr(0));
       tensorStrides.push_back(builder.getIndexAttr(1));
@@ -1658,78 +1728,92 @@ triton::AddPtrOp PtrState::createAddPtrOp(OpBuilder &builder, Location loc){
     }
   }
 
-  assert(tensorSizes.size() && tensorStrides.size() && tensorOffsets.size() && tensorShape.size());
-  assert(tensorSizes.size() == tensorStrides.size() && tensorOffsets.size() == tensorShape.size());
+  assert(tensorSizes.size() && tensorStrides.size() && tensorOffsets.size() &&
+         tensorShape.size());
+  assert(tensorSizes.size() == tensorStrides.size() &&
+         tensorOffsets.size() == tensorShape.size());
   assert(tensorStrides.size() == tensorOffsets.size());
 
   SmallVector<Value> cachedOffsetWithRange;
   auto ptrTensorType = RankedTensorType::get(tensorSizes, ptrType);
-  auto broadCastType = RankedTensorType::get({tensorSizes},  builder.getI32Type());
-  auto dims = tensorSizes.size() ;
-  for (int i = 0; i < dims; i++){
+  auto broadCastType =
+      RankedTensorType::get({tensorSizes}, builder.getI32Type());
+  auto dims = tensorSizes.size();
+  for (int i = 0; i < dims; i++) {
     auto size = tensorSizes[i];
     auto offset = tensorOffsets[i];
     auto dimOffset = tensorDimOffset[i];
     // fixme, kaixin, type is not good to set as I32 .
     auto indexI32RowType = RankedTensorType::get({size}, builder.getI32Type());
-    auto splatType = RankedTensorType::get({size}, builder.getI32Type());  
+    auto splatType = RankedTensorType::get({size}, builder.getI32Type());
     // make range
-    Value range = builder.create<triton::MakeRangeOp>(loc, indexI32RowType, 0, size);
-    
-    Value strideValue = materializeValue( builder, loc, tensorStrides[i] );
+    Value range =
+        builder.create<triton::MakeRangeOp>(loc, indexI32RowType, 0, size);
+
+    Value strideValue = materializeValue(builder, loc, tensorStrides[i]);
     if (strideValue.getType().isIndex()) {
-        strideValue = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), strideValue );
+      strideValue = builder.create<arith::IndexCastOp>(
+          loc, builder.getI32Type(), strideValue);
     }
-    Value splatStride = builder.create<triton::SplatOp>(loc, splatType, strideValue);
+    Value splatStride =
+        builder.create<triton::SplatOp>(loc, splatType, strideValue);
     auto mulValue = builder.create<arith::MulIOp>(loc, range, splatStride);
-    
+
     // add offset
     Value offsetValue = materializeValue(builder, loc, offset);
     if (offsetValue.getType().isIndex()) {
-        offsetValue = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), offsetValue);
+      offsetValue = builder.create<arith::IndexCastOp>(
+          loc, builder.getI32Type(), offsetValue);
     }
     Value dimOffsetValue = materializeValue(builder, loc, dimOffset);
     if (dimOffsetValue.getType().isIndex()) {
-        dimOffsetValue = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), dimOffsetValue);
+      dimOffsetValue = builder.create<arith::IndexCastOp>(
+          loc, builder.getI32Type(), dimOffsetValue);
     }
-    Value splatOffset = builder.create<triton::SplatOp>(loc, splatType, offsetValue);
-    Value splatDimOffset = builder.create<triton::SplatOp>(loc, splatType, dimOffsetValue);
+    Value splatOffset =
+        builder.create<triton::SplatOp>(loc, splatType, offsetValue);
+    Value splatDimOffset =
+        builder.create<triton::SplatOp>(loc, splatType, dimOffsetValue);
 
     auto addValue = builder.create<arith::AddIOp>(loc, splatOffset, mulValue);
-    auto addDimValue = builder.create<arith::AddIOp>(loc, splatDimOffset, range);
+    auto addDimValue =
+        builder.create<arith::AddIOp>(loc, splatDimOffset, range);
     stateInfo[i].dimVar = addDimValue;
 
-    
     // expand dim
     Value expandedValue = addValue;
     for (int j = 0; j < dims; ++j) {
       if (j == i)
         continue;
-      expandedValue = builder.create<triton::ExpandDimsOp>(loc, expandedValue, j);
+      expandedValue =
+          builder.create<triton::ExpandDimsOp>(loc, expandedValue, j);
     }
     // broadcast
-    auto broadcastValue = builder.create<triton::BroadcastOp>(loc, broadCastType, expandedValue);
+    auto broadcastValue =
+        builder.create<triton::BroadcastOp>(loc, broadCastType, expandedValue);
     cachedOffsetWithRange.push_back(broadcastValue);
   }
-  
-  // add all offsets together 
+
+  // add all offsets together
   auto addptr_offset = cachedOffsetWithRange[0];
-  for (int i= 1; i < dims; i++) {
-    addptr_offset= builder.create<arith::AddIOp>(loc, addptr_offset, cachedOffsetWithRange[i]);
+  for (int i = 1; i < dims; i++) {
+    addptr_offset = builder.create<arith::AddIOp>(loc, addptr_offset,
+                                                  cachedOffsetWithRange[i]);
   }
 
-  auto addPtrType = RankedTensorType::get({tensorSizes},  ptrTensorType.getElementType()); 
+  auto addPtrType =
+      RankedTensorType::get({tensorSizes}, ptrTensorType.getElementType());
   // Splat ptr
   Value splatPtr = builder.create<triton::SplatOp>(loc, addPtrType, source);
-  // create AddPtrOp   
-  auto addptrOp = builder.create<triton::AddPtrOp>(loc, addPtrType, splatPtr, addptr_offset);
-    LLVM_DEBUG({
+  // create AddPtrOp
+  auto addptrOp = builder.create<triton::AddPtrOp>(loc, addPtrType, splatPtr,
+                                                   addptr_offset);
+  LLVM_DEBUG({
     llvm::dbgs() << "triton::AddPtrOp:\n";
     addptrOp->dump();
     this->dump();
   });
   return addptrOp;
-
 }
 
 LogicalResult PtrAnalysis::rewriteAddptrOp(triton::AddPtrOp op) {
@@ -1745,7 +1829,7 @@ LogicalResult PtrAnalysis::rewriteAddptrOp(triton::AddPtrOp op) {
 
   if (state.scalar && state.stateInfo.empty()) {
     PtrState newState;
-    newState.source = op.getResult();  
+    newState.source = op.getResult();
     newState.scalar = Value();
     newState.sizes = state.sizes;
     newState.memAccTy = state.memAccTy;
@@ -1756,28 +1840,39 @@ LogicalResult PtrAnalysis::rewriteAddptrOp(triton::AddPtrOp op) {
   }
 
   if (state.memAccTy.isUnstructured() || state.memAccTy.isFallback()) {
-    LLVM_DEBUG({ llvm::dbgs() << "do nothing for indirect loading"<< "\n"; });
+    LLVM_DEBUG({
+      llvm::dbgs() << "do nothing for indirect loading"
+                   << "\n";
+    });
     return success();
   }
 
-  if(state.sizes.empty() && !(state.source && state.scalar)){
+  if (state.sizes.empty() && !(state.source && state.scalar)) {
     op->emitError("After addptr, state is empty or missing source/scalar.");
     return failure();
   }
 
-  // analyze whether permute is needed 
+  // analyze whether permute is needed
   if (state.analyzePermute(state.stateInfo, op, builder).failed()) {
     return failure();
   }
 
-  if (!state.hasDivision() && !state.hasModulo() && !state.hasPermute()){
-    LLVM_DEBUG({ llvm::dbgs() << "do nothing for AddptrOp for no division no modulo no permute"<< "\n"; });
+  if (!state.hasDivision() && !state.hasModulo() && !state.hasPermute()) {
+    LLVM_DEBUG({
+      llvm::dbgs()
+          << "do nothing for AddptrOp for no division no modulo no permute"
+          << "\n";
+    });
     return success();
   }
-  LLVM_DEBUG({ llvm::dbgs() << "dump module before createAddPtr"<< "\n"; });
+  LLVM_DEBUG({
+    llvm::dbgs() << "dump module before createAddPtr"
+                 << "\n";
+  });
   LLVM_DEBUG({
     mlir::ModuleOp moduleOp = op->getParentOfType<mlir::ModuleOp>();
-    moduleOp->dump();});
+    moduleOp->dump();
+  });
 
   // sort state info by stride if permute is needed
   if (state.hasPermute()) {
@@ -1795,7 +1890,6 @@ LogicalResult PtrAnalysis::rewriteAddptrOp(triton::AddPtrOp op) {
 
   return success();
 }
-
 
 static bool isPointerType(Type t) {
   if (auto tensor = llvm::dyn_cast<RankedTensorType>(t)) {
@@ -1872,8 +1966,8 @@ PtrState PtrAnalysis::reconcileLoopPtrState(
       // relevant newState that could be updated by the loop.
       newState.scalar = getReplacementVal(forOp, cnt);
     }
-    // else: pure pointer with all offsets materialized in source (from immediate
-    // scalar materialization), no update needed
+    // else: pure pointer with all offsets materialized in source (from
+    // immediate scalar materialization), no update needed
   } else {
     for (auto &info : newState.stateInfo) {
       info.offset = getReplacementVal(forOp, cnt++);
@@ -1904,13 +1998,12 @@ FailureOr<PtrState> PtrAnalysis::getLoopResultPtrState(scf::ForOp forOp,
   auto state = getLoopInitArgPtrState(forOp, index);
   if (failed(state)) {
     return failure();
-}
+  }
 
   return reconcileLoopPtrState(
       forOp, index, state.value(),
       [](scf::ForOp op, size_t index) { return op->getResult(index); });
 }
-
 
 // Update for-loop transformation to the latest triton-shared version
 LogicalResult PtrAnalysis::rewriteForOp(scf::ForOp op) {
@@ -1937,7 +2030,7 @@ LogicalResult PtrAnalysis::rewriteForOp(scf::ForOp op) {
 
     // Save the current init arg's PtrState
     knownPtrs[arg] = state.value();
-    continue ;
+    continue;
     // if (isPointerType(arg.getType())) {
     //   if (state->getRank() != 0) {
     //     if (state->memAccTy.isUnstructured()) {
@@ -1968,13 +2061,13 @@ PtrState PtrAnalysis::reconcileWhilePtrState(
     llvm::function_ref<Value(scf::WhileOp op, size_t)> getReplacementVal) {
   PtrState newState = state;
   int cnt = argIndex + 1;
-  
+
   if (newState.getRank() == 0) {
     if (newState.scalar) {
       newState.scalar = getReplacementVal(whileOp, cnt);
     }
-    // else: pure pointer with all offsets materialized in source (from immediate
-    // scalar materialization), no update needed
+    // else: pure pointer with all offsets materialized in source (from
+    // immediate scalar materialization), no update needed
   } else {
     for (auto &info : newState.stateInfo) {
       info.offset = getReplacementVal(whileOp, cnt++);
@@ -1987,7 +2080,8 @@ PtrState PtrAnalysis::reconcileWhilePtrState(
   return newState;
 }
 
-FailureOr<PtrState> PtrAnalysis::getWhileInitArgPtrState(scf::WhileOp whileOp, size_t index) {
+FailureOr<PtrState> PtrAnalysis::getWhileInitArgPtrState(scf::WhileOp whileOp,
+                                                         size_t index) {
   auto ptr = whileOp.getInits()[index];
 
   if (auto getStateOp = ptr.getDefiningOp<tts::GetStructuredStateOp>()) {
@@ -2013,29 +2107,34 @@ FailureOr<PtrState> PtrAnalysis::getWhileInitArgPtrState(scf::WhileOp whileOp, s
   return failure();
 }
 
-FailureOr<PtrState> PtrAnalysis::getWhileBeforeArgPtrState(scf::WhileOp whileOp, size_t index) {
+FailureOr<PtrState> PtrAnalysis::getWhileBeforeArgPtrState(scf::WhileOp whileOp,
+                                                           size_t index) {
   auto state = getWhileInitArgPtrState(whileOp, index);
   if (failed(state)) {
     return failure();
   }
 
-  return reconcileWhilePtrState(
-      whileOp, index, state.value(),
-      [](scf::WhileOp op, size_t index) { return op.getBeforeArguments()[index]; });
+  return reconcileWhilePtrState(whileOp, index, state.value(),
+                                [](scf::WhileOp op, size_t index) {
+                                  return op.getBeforeArguments()[index];
+                                });
 }
 
-FailureOr<PtrState> PtrAnalysis::getWhileAfterArgPtrState(scf::WhileOp whileOp, size_t index) {
+FailureOr<PtrState> PtrAnalysis::getWhileAfterArgPtrState(scf::WhileOp whileOp,
+                                                          size_t index) {
   auto state = getWhileInitArgPtrState(whileOp, index);
   if (failed(state)) {
     return failure();
   }
 
-  return reconcileWhilePtrState(
-      whileOp, index, state.value(),
-      [](scf::WhileOp op, size_t index) { return op.getAfterArguments()[index]; });
+  return reconcileWhilePtrState(whileOp, index, state.value(),
+                                [](scf::WhileOp op, size_t index) {
+                                  return op.getAfterArguments()[index];
+                                });
 }
 
-FailureOr<PtrState> PtrAnalysis::getWhileResultPtrState(scf::WhileOp whileOp, size_t index) {
+FailureOr<PtrState> PtrAnalysis::getWhileResultPtrState(scf::WhileOp whileOp,
+                                                        size_t index) {
   auto state = getWhileInitArgPtrState(whileOp, index);
   if (failed(state)) {
     return failure();
@@ -2046,17 +2145,18 @@ FailureOr<PtrState> PtrAnalysis::getWhileResultPtrState(scf::WhileOp whileOp, si
       [](scf::WhileOp op, size_t index) { return op->getResult(index); });
 }
 
-LogicalResult PtrAnalysis::visitOperandWhileOp(
-    scf::WhileOp whileOp, Value operand, PtrState &state, 
-    const Location loc, OpBuilder &builder) {
+LogicalResult PtrAnalysis::visitOperandWhileOp(scf::WhileOp whileOp,
+                                               Value operand, PtrState &state,
+                                               const Location loc,
+                                               OpBuilder &builder) {
 
   auto it = llvm::find(whileOp->getResults(), operand);
   auto index = std::distance(whileOp->getResults().begin(), it);
 
   auto newState = getWhileResultPtrState(whileOp, index);
   if (failed(newState)) {
-    whileOp.emitError(
-        "Rewrite while-op failed. Could not find PtrState returned by the loop.");
+    whileOp.emitError("Rewrite while-op failed. Could not find PtrState "
+                      "returned by the loop.");
     return failure();
   }
 
@@ -2077,16 +2177,17 @@ LogicalResult PtrAnalysis::rewriteWhileOp(scf::WhileOp op) {
 
     auto state = getWhileBeforeArgPtrState(op, i);
     if (failed(state)) {
-      op->emitWarning(
-          "Rewrite while-op failed. Could not find PtrState for before-arg index " +
-          std::to_string(i));
+      op->emitWarning("Rewrite while-op failed. Could not find PtrState for "
+                      "before-arg index " +
+                      std::to_string(i));
       continue;
     }
 
     knownPtrs[beforeArg] = state.value();
-    
+
     LLVM_DEBUG({
-      llvm::dbgs() << "Set knownPtrs for before arg " << beforeArg << " at index " << i << "\n";
+      llvm::dbgs() << "Set knownPtrs for before arg " << beforeArg
+                   << " at index " << i << "\n";
     });
   }
 
@@ -2097,16 +2198,17 @@ LogicalResult PtrAnalysis::rewriteWhileOp(scf::WhileOp op) {
 
     auto state = getWhileAfterArgPtrState(op, i);
     if (failed(state)) {
-      op->emitWarning(
-          "Rewrite while-op failed. Could not find PtrState for after-arg index " +
-          std::to_string(i));
+      op->emitWarning("Rewrite while-op failed. Could not find PtrState for "
+                      "after-arg index " +
+                      std::to_string(i));
       continue;
     }
 
     knownPtrs[afterArg] = state.value();
-    
+
     LLVM_DEBUG({
-      llvm::dbgs() << "Set knownPtrs for after arg " << afterArg << " at index " << i << "\n";
+      llvm::dbgs() << "Set knownPtrs for after arg " << afterArg << " at index "
+                   << i << "\n";
     });
   }
 
@@ -2155,22 +2257,22 @@ PtrAnalysis::rewriteGetStructuredStateOp(tts::GetStructuredStateOp op) {
   }
 
   PtrState state = knownPtrs[tritonValue];
-   
-  if (state.memAccTy.isUnstructured()){
-      op.emitRemark(
-        "Rewrite GetStructuredStateOp failed. AddPtr involves indirect loading.");
-      op.getResult(0).replaceAllUsesWith(tritonValue);
-      return success() ;
+
+  if (state.memAccTy.isUnstructured()) {
+    op.emitRemark("Rewrite GetStructuredStateOp failed. AddPtr involves "
+                  "indirect loading.");
+    op.getResult(0).replaceAllUsesWith(tritonValue);
+    return success();
   }
 
-  if (!state.hasDivision() && !state.hasModulo()){
-      op.emitRemark(
-        "Rewrite GetStructuredStateOp failed. AddPtr involves don't not have division/modulo loading.");
-      op.getResult(0).replaceAllUsesWith(tritonValue);
+  if (!state.hasDivision() && !state.hasModulo()) {
+    op.emitRemark("Rewrite GetStructuredStateOp failed. AddPtr involves don't "
+                  "not have division/modulo loading.");
+    op.getResult(0).replaceAllUsesWith(tritonValue);
 
-      return success() ;
+    return success();
   }
-  
+
   Value remappedValue =
       ptrMap.contains(tritonValue) ? ptrMap.lookup(tritonValue) : tritonValue;
 
@@ -2259,7 +2361,7 @@ PtrAnalysis::rewriteYieldOp(scf::YieldOp op,
     // Verify that shape is not updated during the for loop
     auto forState = knownPtrsFor[i];
     for (auto i = 0; i < forState.getRank(); ++i) {
-      if(forState.stateInfo[i].shape != state.stateInfo[i].shape){
+      if (forState.stateInfo[i].shape != state.stateInfo[i].shape) {
         // Special case, see comments in addState in dealing with shape/modulo
         if (i == 0 && forState.getRank() == 2) {
           if (forState.stateInfo[1].shape == state.stateInfo[0].shape &&
@@ -2289,7 +2391,7 @@ PtrAnalysis::rewriteYieldOp(scf::YieldOp op,
   // that correspond to offset and stride for each dimension and append
   // them to yield operands.
   for (auto state : initArgState) {
-    for(size_t i = 0; i < state.stateInfo.size(); i++){
+    for (size_t i = 0; i < state.stateInfo.size(); i++) {
       auto s = state.stateInfo[i].offset;
       if (auto sIntAttr = getIntAttr(s)) {
         auto constOp = builder.create<arith::ConstantOp>(
@@ -2332,7 +2434,8 @@ PtrAnalysis::rewriteYieldOp(scf::YieldOp op,
   return success();
 }
 
-LogicalResult PtrAnalysis::analysisSplat(Operation *op, OpBuilder &builder, Value &ptr, PtrState &ptrState){
+LogicalResult PtrAnalysis::analysisSplat(Operation *op, OpBuilder &builder,
+                                         Value &ptr, PtrState &ptrState) {
   if (auto loadOp = dyn_cast<triton::LoadOp>(op)) {
     ptr = loadOp.getPtr();
   } else if (auto storeOp = llvm::dyn_cast<triton::StoreOp>(op)) {
@@ -2341,57 +2444,60 @@ LogicalResult PtrAnalysis::analysisSplat(Operation *op, OpBuilder &builder, Valu
     ptr = atomicRmwOp.getPtr();
   } else if (auto atomicCasOp = llvm::dyn_cast<triton::AtomicCASOp>(op)) {
     ptr = atomicCasOp.getPtr();
-  }
-  else {
-      op->emitError("Unsupported operation type for mask generate mask");
-      return failure();
+  } else {
+    op->emitError("Unsupported operation type for mask generate mask");
+    return failure();
   }
   PtrState tempState;
 
   if (auto splatOp = ptr.getDefiningOp<triton::SplatOp>()) {
     auto splatPtr = splatOp.getSrc();
     if (auto addptrOp = splatPtr.getDefiningOp<triton::AddPtrOp>()) {
-      if (knownPtrs.find(addptrOp)==knownPtrs.end()) {
+      if (knownPtrs.find(addptrOp) == knownPtrs.end()) {
         op->emitError("can not find addptrOp's state!");
         return failure();
       }
       tempState = knownPtrs[addptrOp];
-    }
-    else tempState.source = splatPtr;
+    } else
+      tempState.source = splatPtr;
 
     auto tensorType = dyn_cast<mlir::RankedTensorType>(ptr.getType());
     if (tensorType) {
-      for(size_t i = 0; i < tensorType.getRank(); ++i){
-        tempState.sizes.push_back(builder.getIndexAttr(tensorType.getDimSize(i)));
+      for (size_t i = 0; i < tensorType.getRank(); ++i) {
+        tempState.sizes.push_back(
+            builder.getIndexAttr(tensorType.getDimSize(i)));
       }
-      tempState.ptrIsTensor=true;
-    }else{
+      tempState.ptrIsTensor = true;
+    } else {
       op->emitError("SplatOp's result must be a Tensor");
       return failure();
     }
-  } else if(auto bitcastOp = ptr.getDefiningOp<triton::BitcastOp>()){
+  } else if (auto bitcastOp = ptr.getDefiningOp<triton::BitcastOp>()) {
     auto bitcastPtr = bitcastOp.getSrc();
-    if(auto addptrOp = bitcastPtr.getDefiningOp<triton::AddPtrOp>()){
-      if (knownPtrs.find(addptrOp)==knownPtrs.end()) {
+    if (auto addptrOp = bitcastPtr.getDefiningOp<triton::AddPtrOp>()) {
+      if (knownPtrs.find(addptrOp) == knownPtrs.end()) {
         op->emitError("can not find addptrOp's state!");
         return failure();
       }
       tempState = knownPtrs[addptrOp];
       auto resultType = ptr.getType();
-      if(auto rankedType = dyn_cast<mlir::RankedTensorType>(resultType)){
+      if (auto rankedType = dyn_cast<mlir::RankedTensorType>(resultType)) {
         resultType = rankedType.getElementType();
       }
-      auto bitCastOp = builder.create<triton::BitcastOp>(op->getLoc(), resultType, tempState.source);
+      auto bitCastOp = builder.create<triton::BitcastOp>(
+          op->getLoc(), resultType, tempState.source);
       tempState.source = bitCastOp.getResult();
-    }
-    else tempState.source = bitcastPtr;
+    } else
+      tempState.source = bitcastPtr;
 
   } else if (isa<triton::PointerType>(ptr.getType())) { // load from arg
     tempState.source = ptr;
-    tempState.ptrIsTensor=false;
-    tempState.scalar = builder.create<arith::ConstantOp>(op->getLoc(), 
-                                            builder.getIndexType(), 
-                                            builder.getIndexAttr(0)).getResult();
+    tempState.ptrIsTensor = false;
+    tempState.scalar =
+        builder
+            .create<arith::ConstantOp>(op->getLoc(), builder.getIndexType(),
+                                       builder.getIndexAttr(0))
+            .getResult();
   } else {
     op->emitError("PtrAnalysis: pointer is not replace with tts.make_tptr so "
                   "loadOp cannot be rewritten");
@@ -2399,10 +2505,10 @@ LogicalResult PtrAnalysis::analysisSplat(Operation *op, OpBuilder &builder, Valu
   }
 
   if (tempState.memAccTy.isUnstructured() || tempState.memAccTy.isFallback()) {
-      return success();
+    return success();
   }
-  if (!tempState.hasDivision() && !tempState.hasModulo()){
-      return success(); 
+  if (!tempState.hasDivision() && !tempState.hasModulo()) {
+    return success();
   }
 
   auto maketptrOp = tempState.createAddPtrOp(builder, op->getLoc());
@@ -2413,17 +2519,21 @@ LogicalResult PtrAnalysis::analysisSplat(Operation *op, OpBuilder &builder, Valu
   return success();
 }
 
-LogicalResult PtrAnalysis::rewriteScalarLoadOp(triton::LoadOp op, OpBuilder &builder,
-                                                Value &loadResult, const Location loc) {
-  if(ptrMap.lookupOrNull(op.getPtr())){
+LogicalResult PtrAnalysis::rewriteScalarLoadOp(triton::LoadOp op,
+                                               OpBuilder &builder,
+                                               Value &loadResult,
+                                               const Location loc) {
+  if (ptrMap.lookupOrNull(op.getPtr())) {
     auto tensorType = dyn_cast<mlir::RankedTensorType>(loadResult.getType());
     auto index = builder.create<mlir::arith::ConstantIndexOp>(loc, 0);
     SmallVector<mlir::Value> indices;
-    for(size_t i = 0; i < tensorType.getRank(); ++i){
-      assert(tensorType.getDimSize(i) == 1 && "Input tensor should be of shape tensor<1xanytype>");
+    for (size_t i = 0; i < tensorType.getRank(); ++i) {
+      assert(tensorType.getDimSize(i) == 1 &&
+             "Input tensor should be of shape tensor<1xanytype>");
       indices.push_back(index);
     }
-    auto extractedElement = builder.create<mlir::tensor::ExtractOp>(loc, loadResult, indices);
+    auto extractedElement =
+        builder.create<mlir::tensor::ExtractOp>(loc, loadResult, indices);
     loadResult = extractedElement.getResult();
   }
   op.replaceAllUsesWith(loadResult);
@@ -2431,9 +2541,9 @@ LogicalResult PtrAnalysis::rewriteScalarLoadOp(triton::LoadOp op, OpBuilder &bui
   return success();
 }
 
-
-LogicalResult PtrAnalysis::createBroadcast(Operation *op, SmallVector<int64_t> &loadShape,
-                                            Value &loadResult){
+LogicalResult PtrAnalysis::createBroadcast(Operation *op,
+                                           SmallVector<int64_t> &loadShape,
+                                           Value &loadResult) {
   PtrState ptrState;
   OpBuilder builder(op);
   auto loc = op->getLoc();
@@ -2443,16 +2553,16 @@ LogicalResult PtrAnalysis::createBroadcast(Operation *op, SmallVector<int64_t> &
     ptrState = knownPtrs[loadOp.getPtr()];
   } else if (auto storeOp = llvm::dyn_cast<triton::StoreOp>(op)) {
     ptrState = knownPtrs[storeOp.getPtr()];
-  }else if (auto atomicRmwOp = llvm::dyn_cast<triton::AtomicRMWOp>(op)) {
+  } else if (auto atomicRmwOp = llvm::dyn_cast<triton::AtomicRMWOp>(op)) {
     ptrState = knownPtrs[atomicRmwOp.getPtr()];
-  }else if (auto atomicCasOp = llvm::dyn_cast<triton::AtomicCASOp>(op)) {
+  } else if (auto atomicCasOp = llvm::dyn_cast<triton::AtomicCASOp>(op)) {
     ptrState = knownPtrs[atomicCasOp.getPtr()];
-  }else {
-      op->emitError("Unsupported operation type for mask generate mask");
-      return failure();
+  } else {
+    op->emitError("Unsupported operation type for mask generate mask");
+    return failure();
   }
 
-  for(size_t i = 0; i < ptrState.stateInfo.size(); ++i){
+  for (size_t i = 0; i < ptrState.stateInfo.size(); ++i) {
     auto x = ptrState.stateInfo[i];
     auto staticStride = getIntAttr(x.stride);
     auto staticShape = getIntAttr(x.shape);
@@ -2462,30 +2572,31 @@ LogicalResult PtrAnalysis::createBroadcast(Operation *op, SmallVector<int64_t> &
       op->emitError("do not support dynamic shape");
       return failure();
     }
-    if(staticStride.has_value() && staticStride == 0){
-      int64_t divDim = staticMask.value() ? (staticSize.value() - 1) / staticMask.value() + 1 : staticSize.value();
-      int64_t remsiDim = staticShape.value() ? staticShape.value() : staticSize.value();
+    if (staticStride.has_value() && staticStride == 0) {
+      int64_t divDim = staticMask.value()
+                           ? (staticSize.value() - 1) / staticMask.value() + 1
+                           : staticSize.value();
+      int64_t remsiDim =
+          staticShape.value() ? staticShape.value() : staticSize.value();
       int64_t trueDim = std::min(divDim, remsiDim);
       loadShape.insert(loadShape.begin() + i, trueDim);
       dimensions.push_back(i);
     }
   }
-  auto targetShapeType = RankedTensorType::get(loadShape, cast<ShapedType>(loadResult.getType()).getElementType());
+  auto targetShapeType = RankedTensorType::get(
+      loadShape, cast<ShapedType>(loadResult.getType()).getElementType());
 
-  auto init = builder.create<tensor::EmptyOp>(loc, loadShape, cast<ShapedType>(loadResult.getType()).getElementType());
+  auto init = builder.create<tensor::EmptyOp>(
+      loc, loadShape, cast<ShapedType>(loadResult.getType()).getElementType());
   auto broadcastShapeAttr = builder.getI64VectorAttr(loadShape);
-  auto broadcastOp = builder.create<linalg::BroadcastOp>(
-      loc,
-      loadResult,
-      init,
-      dimensions
-  );
+  auto broadcastOp =
+      builder.create<linalg::BroadcastOp>(loc, loadResult, init, dimensions);
   loadResult = broadcastOp->getResult(0);
   return success();
 }
 
-
-LogicalResult PtrAnalysis::createReshape(Operation *op, Value &srcResult, SmallVector<int64_t> &srcShape) {
+LogicalResult PtrAnalysis::createReshape(Operation *op, Value &srcResult,
+                                         SmallVector<int64_t> &srcShape) {
   Value ptr;
   PtrState ptrState;
   OpBuilder builder(op);
@@ -2501,12 +2612,12 @@ LogicalResult PtrAnalysis::createReshape(Operation *op, Value &srcResult, SmallV
   } else if (auto atomicCasOp = llvm::dyn_cast<triton::AtomicCASOp>(op)) {
     ptrState = knownPtrs[atomicCasOp.getPtr()];
   } else {
-      op->emitError("Unsupported operation type for mask generate mask");
-      return failure();
+    op->emitError("Unsupported operation type for mask generate mask");
+    return failure();
   }
 
-  for(auto x : ptrState.sizes){
-    auto staticSize =  getIntAttr(x);
+  for (auto x : ptrState.sizes) {
+    auto staticSize = getIntAttr(x);
     if (!staticSize.has_value()) {
       op->emitError("do not support dynamic size");
       return failure();
@@ -2516,20 +2627,24 @@ LogicalResult PtrAnalysis::createReshape(Operation *op, Value &srcResult, SmallV
     flatSizes.push_back(1);
   }
   size_t startPos = 0;
-  for(size_t i = 0; i < flatSizes.size(); ++i){
+  for (size_t i = 0; i < flatSizes.size(); ++i) {
     size_t endPos = startPos + ptrState.dimLenth[i];
-    for(size_t j = startPos; j < endPos; ++j){
+    for (size_t j = startPos; j < endPos; ++j) {
       assert(j < srcShape.size());
       flatSizes[i] *= srcShape[j];
     }
     startPos = endPos;
   }
-  if(srcShape.size() != flatSizes.size()){
-    auto targetShapeType = RankedTensorType::get(flatSizes, cast<ShapedType>(srcResult.getType()).getElementType());
+  if (srcShape.size() != flatSizes.size()) {
+    auto targetShapeType = RankedTensorType::get(
+        flatSizes, cast<ShapedType>(srcResult.getType()).getElementType());
     auto targetShapeAttr = DenseIntElementsAttr::get(
-      RankedTensorType::get({static_cast<int64_t>(flatSizes.size())}, builder.getI64Type()), flatSizes);
+        RankedTensorType::get({static_cast<int64_t>(flatSizes.size())},
+                              builder.getI64Type()),
+        flatSizes);
     auto targetShape = builder.create<arith::ConstantOp>(loc, targetShapeAttr);
-    auto reshapeOp = builder.create<tensor::ReshapeOp>(loc, targetShapeType, srcResult, targetShape);
+    auto reshapeOp = builder.create<tensor::ReshapeOp>(loc, targetShapeType,
+                                                       srcResult, targetShape);
 
     srcResult = reshapeOp.getResult();
   }
@@ -2537,11 +2652,13 @@ LogicalResult PtrAnalysis::createReshape(Operation *op, Value &srcResult, SmallV
   return success();
 }
 
-LogicalResult PtrAnalysis::analyzeMask(Operation * op, PtrState &ptrState, triton_linearize::MaskState& mstate, 
-                                            SmallVector<OpFoldResult> &dims, SmallVector<int64_t> &dimMode) {
+LogicalResult PtrAnalysis::analyzeMask(Operation *op, PtrState &ptrState,
+                                       triton_linearize::MaskState &mstate,
+                                       SmallVector<OpFoldResult> &dims,
+                                       SmallVector<int64_t> &dimMode) {
   Value mask;
   OpBuilder builder(op);
-  //mlir::triton_linearize::MaskState mstate;
+  // mlir::triton_linearize::MaskState mstate;
   auto defaultAttr = builder.getIndexAttr(0);
   auto loc = op->getLoc();
   assert(dimMode.empty());
@@ -2552,9 +2669,9 @@ LogicalResult PtrAnalysis::analyzeMask(Operation * op, PtrState &ptrState, trito
     mask = storeOp.getMask();
   } else if (auto atomicRmwOp = llvm::dyn_cast<triton::AtomicRMWOp>(op)) {
     mask = atomicRmwOp.getMask();
-  }else {
-      op->emitError("Unsupported operation type for mask generate mask");
-      return failure();
+  } else {
+    op->emitError("Unsupported operation type for mask generate mask");
+    return failure();
   }
   if (mstate.parse(mask, loc, builder).failed()) {
     op->emitRemark("MaskAnalysis failed");
@@ -2562,43 +2679,52 @@ LogicalResult PtrAnalysis::analyzeMask(Operation * op, PtrState &ptrState, trito
   }
   dims = mstate.dims;
   size_t remainMask = dims.size();
-  if(mstate.stateInfo.empty())  mstate.stateInfo.push_back(triton_linearize::dimInfo(defaultAttr, defaultAttr));
+  if (mstate.stateInfo.empty())
+    mstate.stateInfo.push_back(
+        triton_linearize::dimInfo(defaultAttr, defaultAttr));
   SmallVector<OpFoldResult> tempDim;
-  for(auto info : ptrState.stateInfo){
+  for (auto info : ptrState.stateInfo) {
     auto staticStride = getIntAttr(info.stride);
     auto staticShape = getIntAttr(info.shape);
     auto staticMask = getIntAttr(info.mask);
     auto staticSize = getIntAttr(ptrState.sizes[info.dim]);
 
     assert(staticShape.has_value() && staticMask.has_value());
-    if(staticStride.has_value() && staticStride.value() == 0) continue;
+    if (staticStride.has_value() && staticStride.value() == 0)
+      continue;
 
     bool findMask = false;
-    for(int i = 0; i < mstate.stateInfo.size(); ++i){
+    for (int i = 0; i < mstate.stateInfo.size(); ++i) {
       auto msShape = getIntAttr(mstate.stateInfo[i].shape);
       auto msDiv = getIntAttr(mstate.stateInfo[i].div);
       auto msDim = mstate.stateInfo[i].dim;
       assert(msShape.has_value() && msDiv.has_value());
-      if(msDim == info.dim && ((msShape.value() == staticShape.value() &&
-          msDiv.value() == staticMask.value()))){
+      if (msDim == info.dim && ((msShape.value() == staticShape.value() &&
+                                 msDiv.value() == staticMask.value()))) {
         findMask = true;
-      }else if(msDim == info.dim && (staticMask.value() == 0 || staticMask.value() % staticSize.value() != 0) &&
-               msShape.value() == 0 && msDiv.value() == 0){
+      } else if (msDim == info.dim &&
+                 (staticMask.value() == 0 ||
+                  staticMask.value() % staticSize.value() != 0) &&
+                 msShape.value() == 0 && msDiv.value() == 0) {
         size_t trueLenth = 0;
-        for(auto y : ptrState.stateInfo){
-          if(y.dim != info.dim) continue;
+        for (auto y : ptrState.stateInfo) {
+          if (y.dim != info.dim)
+            continue;
           auto mask = getIntAttr(y.mask);
           auto size = getIntAttr(ptrState.sizes[y.dim]);
-          if(mask.value() == 0 || mask.value() % size.value() != 0) ++trueLenth;
+          if (mask.value() == 0 || mask.value() % size.value() != 0)
+            ++trueLenth;
         }
-        if(trueLenth == 1)  findMask = true;
-        // When mask analysis fails, return a remark and use select to handle the mask.
-        if(findMask && msShape.value() + msDiv.value() != 0){
-           op->emitRemark("Mask-Pointer inconsistency detected");
-           return failure();
+        if (trueLenth == 1)
+          findMask = true;
+        // When mask analysis fails, return a remark and use select to handle
+        // the mask.
+        if (findMask && msShape.value() + msDiv.value() != 0) {
+          op->emitRemark("Mask-Pointer inconsistency detected");
+          return failure();
         }
       }
-      if(findMask){
+      if (findMask) {
         tempDim.emplace_back(dims[i]);
         int64_t mode = mstate.stateInfo[i].isSlt ? 0 : 1;
         dimMode.emplace_back(mode);
@@ -2606,163 +2732,182 @@ LogicalResult PtrAnalysis::analyzeMask(Operation * op, PtrState &ptrState, trito
         break;
       }
     }
-    if(!findMask) {
-      int64_t divDim = staticMask.value() ? (staticSize.value() - 1) / staticMask.value() + 1 : staticSize.value();
-      int64_t remsiDim = staticShape.value() ? staticShape.value() : staticSize.value();
+    if (!findMask) {
+      int64_t divDim = staticMask.value()
+                           ? (staticSize.value() - 1) / staticMask.value() + 1
+                           : staticSize.value();
+      int64_t remsiDim =
+          staticShape.value() ? staticShape.value() : staticSize.value();
       int64_t trueDim = std::min(divDim, remsiDim);
       tempDim.emplace_back(builder.getIndexAttr(trueDim));
       dimMode.emplace_back(0);
     }
   }
-  // When mask analysis fails, return a remark and use select to handle the mask.
-  if(remainMask != 0){
+  // When mask analysis fails, return a remark and use select to handle the
+  // mask.
+  if (remainMask != 0) {
     op->emitRemark("Mask-Pointer inconsistency detected");
     return failure();
   }
-  if(ptrState.stateInfo.size()){
+  if (ptrState.stateInfo.size()) {
     dims = tempDim;
   }
   return success();
 }
 
-Value PtrAnalysis::buildMaskValue(Value& ptr, PtrState& ptrState, triton_linearize::MaskState& maskState,  OpBuilder& builder, Location loc){
-    
-    Value generated_mask ;
-    SmallVector<Value> dimMasks;
-    auto findStateInfo = [&](triton_linearize::dimInfo& maskInfo, StateInfo& stateInfo, int& order) {
-      bool found = false ;
-      for (int j = 0; j < ptrState.stateInfo.size(); j++){
-          auto state = ptrState.stateInfo[j];
-          if (state.dim != maskInfo.dim) {
-              continue;
-          }
-          if (state.hasModulo() != maskInfo.hasModulo()) {
-             continue ;
-          }
-          if (state.hasDivision() != maskInfo.hasDivision()) {
-             continue ;
-          }
-          if ( state.hasDivision() && maskInfo.hasDivision()  ) 
-          {
-            if (state.mask != maskInfo.div) {
-                continue ;
-            }
-          }
-          if ( state.hasModulo() && maskInfo.hasModulo()  ) 
-          {
-            if (state.shape != maskInfo.shape) {
-                continue ;
-            }
-          }
-          stateInfo = state ;
-          order = j ;
-          found = true ;
-          break;      
-      }          
-      return found;
-    };
-    LLVM_DEBUG({llvm::dbgs() << "buildMaskValue maskState dump:\n";});
-    maskState.dump() ;
-    // ptr is the result of createAddPtr
-    auto tensorType = dyn_cast<mlir::RankedTensorType>(ptr.getType());
-    for (int i = 0; i < maskState.stateInfo.size(); i++) {
-        auto maskInfo =  maskState.stateInfo[i];
-        StateInfo stateInfo ;
-        int order = 0 ;
-        if (!findStateInfo(maskInfo, stateInfo, order) ){
-            LLVM_DEBUG({llvm::dbgs() << "failed to find ptr stateinfo for mask info:\n";});
-            maskInfo.dump() ;
-            return generated_mask ;
+Value PtrAnalysis::buildMaskValue(Value &ptr, PtrState &ptrState,
+                                  triton_linearize::MaskState &maskState,
+                                  OpBuilder &builder, Location loc) {
+
+  Value generated_mask;
+  SmallVector<Value> dimMasks;
+  auto findStateInfo = [&](triton_linearize::dimInfo &maskInfo,
+                           StateInfo &stateInfo, int &order) {
+    bool found = false;
+    for (int j = 0; j < ptrState.stateInfo.size(); j++) {
+      auto state = ptrState.stateInfo[j];
+      if (state.dim != maskInfo.dim) {
+        continue;
+      }
+      if (state.hasModulo() != maskInfo.hasModulo()) {
+        continue;
+      }
+      if (state.hasDivision() != maskInfo.hasDivision()) {
+        continue;
+      }
+      if (state.hasDivision() && maskInfo.hasDivision()) {
+        if (state.mask != maskInfo.div) {
+          continue;
         }
+      }
+      if (state.hasModulo() && maskInfo.hasModulo()) {
+        if (state.shape != maskInfo.shape) {
+          continue;
+        }
+      }
+      stateInfo = state;
+      order = j;
+      found = true;
+      break;
     }
+    return found;
+  };
+  LLVM_DEBUG({ llvm::dbgs() << "buildMaskValue maskState dump:\n"; });
+  maskState.dump();
+  // ptr is the result of createAddPtr
+  auto tensorType = dyn_cast<mlir::RankedTensorType>(ptr.getType());
+  for (int i = 0; i < maskState.stateInfo.size(); i++) {
+    auto maskInfo = maskState.stateInfo[i];
+    StateInfo stateInfo;
+    int order = 0;
+    if (!findStateInfo(maskInfo, stateInfo, order)) {
+      LLVM_DEBUG(
+          { llvm::dbgs() << "failed to find ptr stateinfo for mask info:\n"; });
+      maskInfo.dump();
+      return generated_mask;
+    }
+  }
 
-    for (int i = 0; i < maskState.stateInfo.size(); i++) {
-        // get new dim value and scalar from ptrstate and mask state, for example ,
-      // %44 = arith.cmpi slt, %13, %43 
-      // dim value is %13, scalar is scalar 
-      auto maskInfo =  maskState.stateInfo[i];
-      auto scalar = maskInfo.rhs; 
-      StateInfo stateInfo ;
-      int order = 0 ;
-      if (!findStateInfo(maskInfo, stateInfo, order) ){
-        LLVM_DEBUG({llvm::dbgs() << "failed to find ptr stateinfo for mask info:\n";});
-        maskInfo.dump() ;
-        stateInfo.dump() ;
-        continue ;
-      }else {
-        LLVM_DEBUG({llvm::dbgs() << "find ptr stateinfo for mask info:\n";});
-        maskInfo.dump() ;
-        stateInfo.dump() ;
-      }
-      auto dimValue = stateInfo.dimVar;     
-      assert(dimValue &&  "dimValue can not be nullptr");
-      // spat the the scalar 
-      if (scalar.getType().isIndex()) {
-        scalar = builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), scalar );
-      }
-      auto splatType = dyn_cast<mlir::RankedTensorType>(dimValue.getType());
-      auto splat = builder.create<triton::SplatOp>(loc, splatType, scalar);
-      LLVM_DEBUG({llvm::dbgs() << "splatType:" << splatType << " scalar:" << scalar << "\n";});
-      
+  for (int i = 0; i < maskState.stateInfo.size(); i++) {
+    // get new dim value and scalar from ptrstate and mask state, for example ,
+    // %44 = arith.cmpi slt, %13, %43
+    // dim value is %13, scalar is scalar
+    auto maskInfo = maskState.stateInfo[i];
+    auto scalar = maskInfo.rhs;
+    StateInfo stateInfo;
+    int order = 0;
+    if (!findStateInfo(maskInfo, stateInfo, order)) {
+      LLVM_DEBUG(
+          { llvm::dbgs() << "failed to find ptr stateinfo for mask info:\n"; });
+      maskInfo.dump();
+      stateInfo.dump();
+      continue;
+    } else {
+      LLVM_DEBUG({ llvm::dbgs() << "find ptr stateinfo for mask info:\n"; });
+      maskInfo.dump();
+      stateInfo.dump();
+    }
+    auto dimValue = stateInfo.dimVar;
+    assert(dimValue && "dimValue can not be nullptr");
+    // spat the the scalar
+    if (scalar.getType().isIndex()) {
+      scalar =
+          builder.create<arith::IndexCastOp>(loc, builder.getI32Type(), scalar);
+    }
+    auto splatType = dyn_cast<mlir::RankedTensorType>(dimValue.getType());
+    auto splat = builder.create<triton::SplatOp>(loc, splatType, scalar);
+    LLVM_DEBUG({
+      llvm::dbgs() << "splatType:" << splatType << " scalar:" << scalar << "\n";
+    });
 
-      // compare 
-      Value compValue ;
-      if (maskInfo.isSlt ){          
-          compValue = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt, dimValue, splat);        
-      }else{
-          compValue = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge, dimValue, splat);
-      }
-      // expand
-      auto expandedValue = compValue ;
-      for (int j = 0; j < tensorType.getRank(); ++j) {
-          if (j == order)
-              continue;
-          expandedValue = builder.create<triton::ExpandDimsOp>(loc, expandedValue, j);
-      }
-      // broadcast      
-      auto broadCastType = RankedTensorType::get({tensorType.getShape()},  builder.getI1Type());
-      auto broadcastValue = builder.create<triton::BroadcastOp>(loc, broadCastType, expandedValue);
-      dimMasks.push_back(broadcastValue);      
+    // compare
+    Value compValue;
+    if (maskInfo.isSlt) {
+      compValue = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::slt,
+                                                dimValue, splat);
+    } else {
+      compValue = builder.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sge,
+                                                dimValue, splat);
     }
-    // and all compre OP
-    for (int i = 0; i < dimMasks.size(); i++) {
-      if (i == 0) generated_mask = dimMasks[i] ;
-      else {
-        generated_mask = builder.create<arith::AndIOp>(loc, generated_mask, dimMasks[i]);  
-      }
+    // expand
+    auto expandedValue = compValue;
+    for (int j = 0; j < tensorType.getRank(); ++j) {
+      if (j == order)
+        continue;
+      expandedValue =
+          builder.create<triton::ExpandDimsOp>(loc, expandedValue, j);
     }
-    return generated_mask ;
+    // broadcast
+    auto broadCastType =
+        RankedTensorType::get({tensorType.getShape()}, builder.getI1Type());
+    auto broadcastValue =
+        builder.create<triton::BroadcastOp>(loc, broadCastType, expandedValue);
+    dimMasks.push_back(broadcastValue);
+  }
+  // and all compre OP
+  for (int i = 0; i < dimMasks.size(); i++) {
+    if (i == 0)
+      generated_mask = dimMasks[i];
+    else {
+      generated_mask =
+          builder.create<arith::AndIOp>(loc, generated_mask, dimMasks[i]);
+    }
+  }
+  return generated_mask;
 }
 
-LogicalResult PtrAnalysis::extractScalarFromLoadedTensor(Operation* op, OpBuilder &builder,
-                                                Value &loadResult, const Location loc) {
+LogicalResult PtrAnalysis::extractScalarFromLoadedTensor(Operation *op,
+                                                         OpBuilder &builder,
+                                                         Value &loadResult,
+                                                         const Location loc) {
   Value ptr;
-  if(auto loadOp = dyn_cast<triton::LoadOp>(op)){
+  if (auto loadOp = dyn_cast<triton::LoadOp>(op)) {
     ptr = loadOp.getPtr();
-  } else if(auto atomicRMWOp = dyn_cast<triton::AtomicRMWOp>(op)){
+  } else if (auto atomicRMWOp = dyn_cast<triton::AtomicRMWOp>(op)) {
     ptr = atomicRMWOp.getPtr();
   } else if (auto atomicCasOp = dyn_cast<triton::AtomicCASOp>(op)) {
     ptr = atomicCasOp.getPtr();
-  } else{
+  } else {
     op->emitError("Unsupported operation type for mov data from GM to UB");
     return failure();
   }
 
-  if(ptrMap.lookupOrNull(ptr)){
+  if (ptrMap.lookupOrNull(ptr)) {
     auto tensorType = dyn_cast<mlir::RankedTensorType>(loadResult.getType());
     auto index = builder.create<mlir::arith::ConstantIndexOp>(loc, 0);
     SmallVector<mlir::Value> indices;
-    for(size_t i = 0; i < tensorType.getRank(); ++i){
-      assert(tensorType.getDimSize(i) == 1 && "Input tensor should be of shape tensor<1xanytype>");
+    for (size_t i = 0; i < tensorType.getRank(); ++i) {
+      assert(tensorType.getDimSize(i) == 1 &&
+             "Input tensor should be of shape tensor<1xanytype>");
       indices.push_back(index);
     }
-    auto extractedElement = builder.create<mlir::tensor::ExtractOp>(loc, loadResult, indices);
+    auto extractedElement =
+        builder.create<mlir::tensor::ExtractOp>(loc, loadResult, indices);
     loadResult = extractedElement.getResult();
   }
 
   return success();
 }
-
 
 LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op) {
   auto ptr = ptrMap.lookupOrNull(op.getPtr());
@@ -2774,24 +2919,31 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op) {
   auto defaultAttr = builder.getIndexAttr(0);
 
   if (ptrState.memAccTy.isUnstructured()) {
-    LLVM_DEBUG({ llvm::dbgs() << "do nothing for indirect loading"<< "\n"; });
-    return success() ;
-  }
-  if (!ptrState.hasDivision() && !ptrState.hasModulo() && !ptrState.hasPermute()){
     LLVM_DEBUG({
-        llvm::dbgs() << "do nothing with loadOp for no division no modulo no permute:\n";
-        op->dump();
+      llvm::dbgs() << "do nothing for indirect loading"
+                   << "\n";
+    });
+    return success();
+  }
+  if (!ptrState.hasDivision() && !ptrState.hasModulo() &&
+      !ptrState.hasPermute()) {
+    LLVM_DEBUG({
+      llvm::dbgs()
+          << "do nothing with loadOp for no division no modulo no permute:\n";
+      op->dump();
     });
     return success();
   }
 
   if (!ptr && analysisSplat(op, builder, ptr, ptrState).failed()) {
-    op->emitRemark("The offset value for the load operation is neither from addptr nor splat");
+    op->emitRemark("The offset value for the load operation is neither from "
+                   "addptr nor splat");
     return failure();
   }
 
   LLVM_DEBUG({
-    llvm::dbgs() << "rewriteLoadOp hasPermute = " << ptrState.hasPermute() << "\n";
+    llvm::dbgs() << "rewriteLoadOp hasPermute = " << ptrState.hasPermute()
+                 << "\n";
   });
 
   // auto ptrType = dyn_cast<triton::PointerType>(ptr.getType());
@@ -2801,7 +2953,7 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op) {
   Value scalarOther;
 
   // Analyze the mask operand to determine at runtime the size of the data we
-  // are moving.If the mask analysis fails, skip subsequent mask processing 
+  // are moving.If the mask analysis fails, skip subsequent mask processing
   // and fall back to using select to handle the mask.
   bool generateMaskSuccess = true;
   if (mask && analyzeMask(op, ptrState, maskState, dims, dimMode).failed()) {
@@ -2821,73 +2973,81 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op) {
   }
   // generate new mask based ptrstate, dims, and dimMode
   Value generated_mask;
-  if(generateMaskSuccess){
-    generated_mask = buildMaskValue(ptr, ptrState, maskState, builder, loc ) ;
-    if(!generated_mask){
-        LLVM_DEBUG({llvm::dbgs() << "buildMaskValue failed!\n";});
-        generated_mask = nullptr;
+  if (generateMaskSuccess) {
+    generated_mask = buildMaskValue(ptr, ptrState, maskState, builder, loc);
+    if (!generated_mask) {
+      LLVM_DEBUG({ llvm::dbgs() << "buildMaskValue failed!\n"; });
+      generated_mask = nullptr;
     }
-  } 
+  }
 
   // auto loadArry = cast<ShapedType>(ptr.getType()).getShape();
   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer types.
 
   SmallVector<int64_t> loadShape;
-  llvm::ArrayRef<int64_t> tensorShape ; 
-  Type elmentType ;
+  llvm::ArrayRef<int64_t> tensorShape;
+  Type elmentType;
   if (auto ptrType = dyn_cast<triton::PointerType>(ptr.getType())) {
     tensorShape = cast<ShapedType>(ptrType.getPointeeType()).getShape();
     elmentType = cast<ShapedType>(ptrType.getPointeeType()).getElementType();
-    loadShape =  SmallVector<int64_t>(tensorShape.begin(), tensorShape.end());
+    loadShape = SmallVector<int64_t>(tensorShape.begin(), tensorShape.end());
   } else if (auto ptrType = dyn_cast<ShapedType>(ptr.getType())) {
     tensorShape = ptrType.getShape();
-    elmentType = ptrType.getElementType() ;
-    loadShape =  SmallVector<int64_t>(tensorShape.begin(), tensorShape.end());
+    elmentType = ptrType.getElementType();
+    loadShape = SmallVector<int64_t>(tensorShape.begin(), tensorShape.end());
   }
 
-  triton::LoadOp loadOp ;
+  triton::LoadOp loadOp;
   if (generated_mask) {
-      auto otherType = mlir::RankedTensorType::get(tensorShape, scalarOther.getType());
-      auto splatOther = builder.create<triton::SplatOp>(loc, otherType, scalarOther);
-      loadOp = builder.create<triton::LoadOp>( loc, ptr, generated_mask, splatOther, 
-                                   op.getCache(),  op.getEvict(), op.getIsVolatile());
+    auto otherType =
+        mlir::RankedTensorType::get(tensorShape, scalarOther.getType());
+    auto splatOther =
+        builder.create<triton::SplatOp>(loc, otherType, scalarOther);
+    loadOp = builder.create<triton::LoadOp>(loc, ptr, generated_mask,
+                                            splatOther, op.getCache(),
+                                            op.getEvict(), op.getIsVolatile());
   } else {
-      loadOp = builder.create<triton::LoadOp>( loc, ptr, nullptr, nullptr, 
-                                   op.getCache(),  op.getEvict(), op.getIsVolatile()); 
+    loadOp = builder.create<triton::LoadOp>(loc, ptr, nullptr, nullptr,
+                                            op.getCache(), op.getEvict(),
+                                            op.getIsVolatile());
   }
 
-  // auto loadOp = builder.create<triton::LoadOp>( loc, ptr, nullptr, nullptr, 
-  //                                  op.getCache(),  op.getEvict(), op.getIsVolatile()); 
-                                  
+  // auto loadOp = builder.create<triton::LoadOp>( loc, ptr, nullptr, nullptr,
+  //                                  op.getCache(),  op.getEvict(),
+  //                                  op.getIsVolatile());
+
   LLVM_DEBUG({
     llvm::dbgs() << "creating triton::load:\n";
     loadOp.dump();
   });
   mlir::Value loadResult = loadOp.getResult();
-  if(ptrState.scalar){ // pure scalar or splated tensor
-    if((!ptrState.ptrIsTensor) && extractScalarFromLoadedTensor(op, builder, loadResult, loc).failed())
+  if (ptrState.scalar) { // pure scalar or splated tensor
+    if ((!ptrState.ptrIsTensor) &&
+        extractScalarFromLoadedTensor(op, builder, loadResult, loc).failed())
       return failure();
     op.replaceAllUsesWith(loadResult);
     op->erase();
     return success();
   }
 
-  if(ptrState.hasBroadcast() &&
-    createBroadcast(op, loadShape, loadResult).failed()){
+  if (ptrState.hasBroadcast() &&
+      createBroadcast(op, loadShape, loadResult).failed()) {
     op->emitRemark("Failed to add broadcast");
     return failure();
   }
 
   assert(loadShape.size() == ptrState.stateInfo.size());
-  if(createReshape(op, loadResult, loadShape).failed()){
+  if (createReshape(op, loadResult, loadShape).failed()) {
     op->emitRemark("Failed to reshape load shape");
     return failure();
   }
-  // When addptr has permute, the load result need to permute before select operation
+  // When addptr has permute, the load result need to permute before select
+  // operation
   if (ptrState.hasPermute()) {
     auto inTy = dyn_cast<RankedTensorType>(loadResult.getType());
     if (inTy) {
-      SmallVector<int64_t> order(ptrState.permute.begin(), ptrState.permute.end());
+      SmallVector<int64_t> order(ptrState.permute.begin(),
+                                 ptrState.permute.end());
       // calculate the output shape after transpose
       SmallVector<int64_t> outShape(order.size());
       auto inShape = inTy.getShape();
@@ -2896,7 +3056,8 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op) {
       }
       auto outTy = RankedTensorType::get(outShape, inTy.getElementType());
       SmallVector<int32_t> order32(order.begin(), order.end());
-      auto trans = builder.create<triton::TransOp>(loc, outTy, loadResult, order32);
+      auto trans =
+          builder.create<triton::TransOp>(loc, outTy, loadResult, order32);
       loadResult = trans.getResult();
       LLVM_DEBUG({
         llvm::dbgs() << "create triton::trans:\n";
@@ -2905,12 +3066,13 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op) {
     }
   }
 
-  // When mask analysis fails, we perform a full load 
-  // and subsequently use a select operation to choose the valid data from the mask.
+  // When mask analysis fails, we perform a full load
+  // and subsequently use a select operation to choose the valid data from the
+  // mask.
   if (!generated_mask && mask) {
     auto resultTensorShape = cast<ShapedType>(loadResult.getType()).getShape();
-    assert(cast<ShapedType>(mask.getType()).getShape() == resultTensorShape && 
-                            "load mask shape is not same as load result");
+    assert(cast<ShapedType>(mask.getType()).getShape() == resultTensorShape &&
+           "load mask shape is not same as load result");
     if (!other) {
       auto loadResultType = cast<RankedTensorType>(loadResult.getType());
       auto elementType = loadResultType.getElementType();
@@ -2925,7 +3087,7 @@ LogicalResult PtrAnalysis::rewriteLoadOp(triton::LoadOp op) {
     }
     loadResult = builder.create<arith::SelectOp>(loc, mask, loadResult, other);
   }
-  
+
   op.replaceAllUsesWith(loadResult);
   op->erase();
   return success();
@@ -2996,25 +3158,32 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
   OpBuilder builder(op);
 
   if (ptrState.memAccTy.isUnstructured()) {
-    LLVM_DEBUG({ llvm::dbgs() << "do nothing for indirect store"<< "\n"; });
-    return success() ;
+    LLVM_DEBUG({
+      llvm::dbgs() << "do nothing for indirect store"
+                   << "\n";
+    });
+    return success();
   }
 
-  if (!ptrState.hasDivision() && !ptrState.hasModulo() && !ptrState.hasPermute()){
+  if (!ptrState.hasDivision() && !ptrState.hasModulo() &&
+      !ptrState.hasPermute()) {
     LLVM_DEBUG({
-        llvm::dbgs() << "do nothing with storeOp for no division no modulo no permute:\n";
-        op->dump();
+      llvm::dbgs()
+          << "do nothing with storeOp for no division no modulo no permute:\n";
+      op->dump();
     });
     return success();
   }
 
   if (!ptr && analysisSplat(op, builder, ptr, ptrState).failed()) {
-    op->emitRemark("The offset value for the load operation is neither from addptr nor splat");
+    op->emitRemark("The offset value for the load operation is neither from "
+                   "addptr nor splat");
     return failure();
   }
 
   LLVM_DEBUG({
-    llvm::dbgs() << "RewriteStore hasPermute = " << ptrState.hasPermute() << "\n";
+    llvm::dbgs() << "RewriteStore hasPermute = " << ptrState.hasPermute()
+                 << "\n";
   });
 
   // need to permute val and mask to the normalized shape before store
@@ -3022,14 +3191,16 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
     // create inverse permutation
     auto inverse = [&](ArrayRef<int32_t> p) {
       SmallVector<int32_t> r(p.size());
-      for (int i=0;i<(int)p.size();++i) r[p[i]]=i;
+      for (int i = 0; i < (int)p.size(); ++i)
+        r[p[i]] = i;
       return r;
     }(ArrayRef<int32_t>(ptrState.permute));
 
     if (auto oldTy = dyn_cast<RankedTensorType>(val.getType())) {
       SmallVector<int64_t> newShape(inverse.size());
       auto oldShape = oldTy.getShape();
-      for (size_t i=0;i<inverse.size();++i) newShape[i] = oldShape[inverse[i]];
+      for (size_t i = 0; i < inverse.size(); ++i)
+        newShape[i] = oldShape[inverse[i]];
       auto newTy = RankedTensorType::get(newShape, oldTy.getElementType());
       val = builder.create<triton::TransOp>(loc, newTy, val, inverse);
       LLVM_DEBUG({
@@ -3038,32 +3209,31 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
       });
     }
     if (mask) {
-        if (auto mTy = dyn_cast<RankedTensorType>(mask.getType())) {
-          if ((size_t)mTy.getRank() == inverse.size()) {
-            SmallVector<int64_t> mNewShape(inverse.size());
-            auto mShape = mTy.getShape();
-            for (size_t i=0;i<inverse.size();++i) mNewShape[i] = mShape[inverse[i]];
-            auto mNewTy = RankedTensorType::get(mNewShape, mTy.getElementType());
-            mask = builder.create<triton::TransOp>(loc, mNewTy, mask, inverse);
-            LLVM_DEBUG({
-              llvm::dbgs() << "create triton::trans for mask before store: \n";
-              mask.dump();
-            });
-          }
+      if (auto mTy = dyn_cast<RankedTensorType>(mask.getType())) {
+        if ((size_t)mTy.getRank() == inverse.size()) {
+          SmallVector<int64_t> mNewShape(inverse.size());
+          auto mShape = mTy.getShape();
+          for (size_t i = 0; i < inverse.size(); ++i)
+            mNewShape[i] = mShape[inverse[i]];
+          auto mNewTy = RankedTensorType::get(mNewShape, mTy.getElementType());
+          mask = builder.create<triton::TransOp>(loc, mNewTy, mask, inverse);
+          LLVM_DEBUG({
+            llvm::dbgs() << "create triton::trans for mask before store: \n";
+            mask.dump();
+          });
         }
       }
+    }
   }
 
   auto ptrType = dyn_cast<triton::PointerType>(ptr.getType());
   if (ptrType && !isa<ShapedType>(ptrType.getPointeeType())) {
     auto elementType = val.getType();
-    if(isa<RankedTensorType>(elementType)){
+    if (isa<RankedTensorType>(elementType)) {
       elementType = dyn_cast<RankedTensorType>(elementType).getElementType();
     }
     auto tensorType = mlir::RankedTensorType::get({1}, elementType);
-    auto tensor = builder.create<tensor::FromElementsOp>(
-        loc, tensorType, val
-    );
+    auto tensor = builder.create<tensor::FromElementsOp>(loc, tensorType, val);
     // llvm::dbgs()<<tensor<<"\n";
     val = tensor.getResult();
   }
@@ -3073,7 +3243,7 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
   triton_linearize::MaskState maskState;
 
   // Analyze the mask operand to determine at runtime the size of the data we
-  // are moving.If the mask analysis fails, skip subsequent mask processing 
+  // are moving.If the mask analysis fails, skip subsequent mask processing
   // and fall back to using select to handle the mask.
   bool generateMaskSuccess = true;
   if (mask && analyzeMask(op, ptrState, maskState, dims, dimMode).failed()) {
@@ -3083,27 +3253,32 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
   }
 
   if (!isa<mlir::RankedTensorType>(val.getType())) {
-      assert(val.getType().isIntOrFloat() && "only int or float scalar can be stored!");
-      Value initTensor =
-        builder.create<tensor::EmptyOp>(loc, SmallVector<int64_t>{1}, val.getType());
-      Value filledTensor = builder.create<linalg::FillOp>(loc, ValueRange{val}, ValueRange{initTensor}).result();   
-      auto storeOp = builder.create<triton::StoreOp>(loc, ptr, filledTensor, nullptr, 
-               op.getBoundaryCheck(), op.getCache(), op.getEvict());
-      LLVM_DEBUG({
-        llvm::dbgs() << "creating triton::store:\n";
-        storeOp->dump();
-      });
-      op->erase();
-      return success();
+    assert(val.getType().isIntOrFloat() &&
+           "only int or float scalar can be stored!");
+    Value initTensor = builder.create<tensor::EmptyOp>(
+        loc, SmallVector<int64_t>{1}, val.getType());
+    Value filledTensor = builder
+                             .create<linalg::FillOp>(loc, ValueRange{val},
+                                                     ValueRange{initTensor})
+                             .result();
+    auto storeOp = builder.create<triton::StoreOp>(
+        loc, ptr, filledTensor, nullptr, op.getBoundaryCheck(), op.getCache(),
+        op.getEvict());
+    LLVM_DEBUG({
+      llvm::dbgs() << "creating triton::store:\n";
+      storeOp->dump();
+    });
+    op->erase();
+    return success();
   }
 
   // generate new mask based ptrstate, dims, and dimMode
   Value generated_mask = nullptr;
-  if(generateMaskSuccess){
-    generated_mask = buildMaskValue(ptr, ptrState, maskState, builder, loc) ;
-    if(!generated_mask){
-        LLVM_DEBUG({llvm::dbgs() << "buildMaskValue failed!\n";});
-        generated_mask = nullptr;
+  if (generateMaskSuccess) {
+    generated_mask = buildMaskValue(ptr, ptrState, maskState, builder, loc);
+    if (!generated_mask) {
+      LLVM_DEBUG({ llvm::dbgs() << "buildMaskValue failed!\n"; });
+      generated_mask = nullptr;
     }
   }
 
@@ -3113,7 +3288,7 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
   int64_t storeLen = 1;
 
   for (auto dim : valDims) {
-      valLen *= dim;
+    valLen *= dim;
   }
 
   // auto storeShape = cast<ShapedType>(ptr.getType()).getShape();
@@ -3121,33 +3296,39 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
   SmallVector<int64_t> storeShape;
   if (auto ptrType = dyn_cast<triton::PointerType>(ptr.getType())) {
     auto loadArry = cast<ShapedType>(ptrType.getPointeeType()).getShape();
-    storeShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
+    storeShape = SmallVector<int64_t>(loadArry.begin(), loadArry.end());
   } else if (auto ptrType = dyn_cast<ShapedType>(ptr.getType())) {
     auto loadArry = ptrType.getShape();
-    storeShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
+    storeShape = SmallVector<int64_t>(loadArry.begin(), loadArry.end());
   }
-  for(auto x : storeShape) storeLen *= x;
+  for (auto x : storeShape)
+    storeLen *= x;
 
-  // assert(valLen == storeLen && "Unaligned writes are not currently supported");
-  if(valLen != storeLen){
+  // assert(valLen == storeLen && "Unaligned writes are not currently
+  // supported");
+  if (valLen != storeLen) {
     LLVM_DEBUG({
       llvm::dbgs() << "Unaligned store detected:\n";
-      llvm::dbgs() << "\033[34m" << "valDims.size() = " << valDims.size() << "\033[0m\n";
-      for(auto x :valDims){
+      llvm::dbgs() << "\033[34m"
+                   << "valDims.size() = " << valDims.size() << "\033[0m\n";
+      for (auto x : valDims) {
         llvm::dbgs() << "\033[34m" << x << "\t\033[0m";
       }
-      llvm::dbgs() << "\n\033[34m" << "storeShape.size() = " << storeShape.size() << "\033[0m\n";
-      for(auto x: storeShape){
+      llvm::dbgs() << "\n\033[34m"
+                   << "storeShape.size() = " << storeShape.size()
+                   << "\033[0m\n";
+      for (auto x : storeShape) {
         llvm::dbgs() << "\033[34m" << x << "\t\033[0m";
       }
-      llvm::dbgs() << "\n" << "\t\033[0m";
+      llvm::dbgs() << "\n"
+                   << "\t\033[0m";
     });
     op.emitError("Unaligned writes are not currently supported");
     return failure();
   }
   bool needReshape = false;
-  for(size_t i = 0; i < valDims.size(); ++i){
-    if(valDims.size() != storeShape.size() || valDims[i] != storeShape[i]){
+  for (size_t i = 0; i < valDims.size(); ++i) {
+    if (valDims.size() != storeShape.size() || valDims[i] != storeShape[i]) {
       needReshape = true;
       break;
     }
@@ -3157,48 +3338,57 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
     llvm::dbgs() << "RewriteStore needReshape = " << needReshape << "\n";
   });
 
-  if(needReshape){
-    auto targetShapeType = RankedTensorType::get(storeShape, cast<ShapedType>(val.getType()).getElementType());
+  if (needReshape) {
+    auto targetShapeType = RankedTensorType::get(
+        storeShape, cast<ShapedType>(val.getType()).getElementType());
     auto targetShapeAttr = DenseIntElementsAttr::get(
-      RankedTensorType::get({static_cast<int64_t>(storeShape.size())}, builder.getI64Type()), storeShape);
+        RankedTensorType::get({static_cast<int64_t>(storeShape.size())},
+                              builder.getI64Type()),
+        storeShape);
     auto targetShape = builder.create<arith::ConstantOp>(loc, targetShapeAttr);
-    auto reshapeOp = builder.create<tensor::ReshapeOp>(loc, targetShapeType, val, targetShape);
+    auto reshapeOp = builder.create<tensor::ReshapeOp>(loc, targetShapeType,
+                                                       val, targetShape);
     if (mask) {
-      LLVM_DEBUG({
-        llvm::dbgs() << "Reshape store mask before store op\n";
-      });
-      auto targetMaskShapeType = RankedTensorType::get(storeShape, cast<ShapedType>(mask.getType()).getElementType());
-      mask = builder.create<tensor::ReshapeOp>(loc, targetMaskShapeType, mask, targetShape);
+      LLVM_DEBUG({ llvm::dbgs() << "Reshape store mask before store op\n"; });
+      auto targetMaskShapeType = RankedTensorType::get(
+          storeShape, cast<ShapedType>(mask.getType()).getElementType());
+      mask = builder.create<tensor::ReshapeOp>(loc, targetMaskShapeType, mask,
+                                               targetShape);
     }
     val = reshapeOp.getResult();
   }
 
-  // When mask analysis fails, we perform a full load 
-  // and subsequently use a select operation to choose the valid data from the mask.
-  // TODO Atomic operations are currently unsupported; this store method is single-core only. 
-  // Atomic operation support will be added in future updates.
+  // When mask analysis fails, we perform a full load
+  // and subsequently use a select operation to choose the valid data from the
+  // mask.
+  // TODO Atomic operations are currently unsupported; this store method is
+  // single-core only. Atomic operation support will be added in future updates.
   // fixme, kaixin
   if (!generated_mask && mask) {
     auto resultTensorShape = cast<ShapedType>(val.getType()).getShape();
-    assert(cast<ShapedType>(mask.getType()).getShape() == resultTensorShape && 
-                            "store mask shape is not same as store result");
+    assert(cast<ShapedType>(mask.getType()).getShape() == resultTensorShape &&
+           "store mask shape is not same as store result");
     Value scalarOther;
-    //auto loadOp = builder.create<triton::LoadOp>(loc, ptr, dims, dimMode, scalarOther);
-    auto loadOp = builder.create<triton::LoadOp>(loc, ptr, nullptr, nullptr,
-                                         /*boundaryCheck=*/ArrayRef<int32_t>(),
-                                         /*PaddingOptionAttr=*/nullptr);
+    // auto loadOp = builder.create<triton::LoadOp>(loc, ptr, dims, dimMode,
+    // scalarOther);
+    auto loadOp =
+        builder.create<triton::LoadOp>(loc, ptr, nullptr, nullptr,
+                                       /*boundaryCheck=*/ArrayRef<int32_t>(),
+                                       /*PaddingOptionAttr=*/nullptr);
     val = builder.create<arith::SelectOp>(loc, mask, val, loadOp.getResult());
-    //auto storeOp = builder.create<tts::StoreOp>(loc, ptr, val, dims);
-    auto storeOp = builder.create<triton::StoreOp>(loc, ptr, val, nullptr, 
-               op.getBoundaryCheck(), op.getCache(), op.getEvict());
+    // auto storeOp = builder.create<tts::StoreOp>(loc, ptr, val, dims);
+    auto storeOp = builder.create<triton::StoreOp>(
+        loc, ptr, val, nullptr, op.getBoundaryCheck(), op.getCache(),
+        op.getEvict());
     LLVM_DEBUG({
       llvm::dbgs() << "creating tts::store:\n";
       storeOp->dump();
     });
   } else {
-    //auto storeOp = builder.create<tts::StoreOp>(loc, ptr, val, dims);
-    auto storeOp = builder.create<triton::StoreOp>(loc, ptr, val, generated_mask, 
-               op.getBoundaryCheck(), op.getCache(), op.getEvict());
+    // auto storeOp = builder.create<tts::StoreOp>(loc, ptr, val, dims);
+    auto storeOp = builder.create<triton::StoreOp>(
+        loc, ptr, val, generated_mask, op.getBoundaryCheck(), op.getCache(),
+        op.getEvict());
     LLVM_DEBUG({
       llvm::dbgs() << "creating tts::store:\n";
       storeOp->dump();
@@ -3208,8 +3398,6 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
   op->erase();
   return success();
 }
-
-
 
 // LogicalResult PtrAnalysis::rewriteAtomicRMWOp(triton::AtomicRMWOp op) {
 //   auto ptr = ptrMap.lookupOrNull(op.getPtr());
@@ -3221,8 +3409,8 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   OpBuilder builder(op);
 
 //   if (!ptr && analysisSplat(op, builder, ptr, ptrState).failed()) {
-//     op->emitRemark("The offset value for the atomic_rmw operation is neither from addptr nor splat");
-//     return failure();
+//     op->emitRemark("The offset value for the atomic_rmw operation is neither
+//     from addptr nor splat"); return failure();
 //   }
 //   auto ptrType = dyn_cast<triton::PointerType>(ptr.getType());
 //   if (ptrType && !isa<ShapedType>(ptrType.getPointeeType())) {
@@ -3249,11 +3437,15 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   // }
 //    //fixme, kaixin
 //   // if (!isa<mlir::RankedTensorType>(val.getType())) {
-//   //     assert(val.getType().isIntOrFloat() && "only int or float scalar can be stored!");
+//   //     assert(val.getType().isIntOrFloat() && "only int or float scalar can
+//   be stored!");
 //   //     Value initTensor =
-//   //       builder.create<tensor::EmptyOp>(loc, SmallVector<int64_t>{1}, val.getType());
-//   //     Value filledTensor = builder.create<linalg::FillOp>(loc, ValueRange{val}, ValueRange{initTensor}).result();
-//   //     auto storeOp = builder.create<tts::StoreOp>(loc, ptr, filledTensor, dims);
+//   //       builder.create<tensor::EmptyOp>(loc, SmallVector<int64_t>{1},
+//   val.getType());
+//   //     Value filledTensor = builder.create<linalg::FillOp>(loc,
+//   ValueRange{val}, ValueRange{initTensor}).result();
+//   //     auto storeOp = builder.create<tts::StoreOp>(loc, ptr, filledTensor,
+//   dims);
 //   //     LLVM_DEBUG({
 //   //       llvm::dbgs() << "creating tts::store:\n";
 //   //       storeOp->dump();
@@ -3272,9 +3464,9 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   }
 
 //   // auto storeShape = cast<ShapedType>(ptr.getType()).getShape();
-//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer types.
-//   SmallVector<int64_t> storeShape;
-//   if (auto ptrType = dyn_cast<triton::PointerType>(ptr.getType())) {
+//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer
+//   types. SmallVector<int64_t> storeShape; if (auto ptrType =
+//   dyn_cast<triton::PointerType>(ptr.getType())) {
 //     auto loadArry = cast<ShapedType>(ptrType.getPointeeType()).getShape();
 //     storeShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
 //   } else if (auto ptrType = dyn_cast<ShapedType>(ptr.getType())) {
@@ -3283,15 +3475,14 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   }
 //   for(auto x : storeShape) storeLen *= x;
 
-
-//   // assert(valLen == storeLen && "Unaligned writes are not currently supported");
-//   if(valLen != storeLen){
-//     llvm::dbgs() << "\033[34m" << "valDims.size() = " << valDims.size() << "\033[0m\n";
-//     for(auto x :valDims){
+//   // assert(valLen == storeLen && "Unaligned writes are not currently
+//   supported"); if(valLen != storeLen){
+//     llvm::dbgs() << "\033[34m" << "valDims.size() = " << valDims.size() <<
+//     "\033[0m\n"; for(auto x :valDims){
 //       llvm::dbgs() << "\033[34m" << x << "\t\033[0m";
 //     }
-//     llvm::dbgs() << "\n\033[34m" << "storeShape.size() = " << storeShape.size() << "\033[0m\n";
-//     for(auto x: storeShape){
+//     llvm::dbgs() << "\n\033[34m" << "storeShape.size() = " <<
+//     storeShape.size() << "\033[0m\n"; for(auto x: storeShape){
 //       llvm::dbgs() << "\033[34m" << x << "\t\033[0m";
 //     }
 //     llvm::dbgs() << "\n" << "\t\033[0m";
@@ -3306,12 +3497,14 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //     }
 //   }
 //   if(needReshape){
-//     auto targetShapeType = RankedTensorType::get(storeShape, cast<ShapedType>(val.getType()).getElementType());
-//     auto targetShapeAttr = DenseIntElementsAttr::get(
-//       RankedTensorType::get({static_cast<int64_t>(storeShape.size())}, builder.getI64Type()), storeShape);
-//     auto targetShape = builder.create<arith::ConstantOp>(loc, targetShapeAttr);
-//     auto reshapeOp = builder.create<tensor::ReshapeOp>(loc, targetShapeType, val, targetShape);
-//     val = reshapeOp.getResult();
+//     auto targetShapeType = RankedTensorType::get(storeShape,
+//     cast<ShapedType>(val.getType()).getElementType()); auto targetShapeAttr =
+//     DenseIntElementsAttr::get(
+//       RankedTensorType::get({static_cast<int64_t>(storeShape.size())},
+//       builder.getI64Type()), storeShape);
+//     auto targetShape = builder.create<arith::ConstantOp>(loc,
+//     targetShapeAttr); auto reshapeOp = builder.create<tensor::ReshapeOp>(loc,
+//     targetShapeType, val, targetShape); val = reshapeOp.getResult();
 //   }
 
 //   // TODO: need to support load/store mask generated by >|>=
@@ -3325,7 +3518,8 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   auto valType = val.getType();
 
 //   auto atomicOp = builder.create<tts::AtomicRMWOp>(loc, valType,
-//     op.getAtomicRmwOpAttr(), ptr, val, dims, op.getSemAttr(), op.getScopeAttr() );
+//     op.getAtomicRmwOpAttr(), ptr, val, dims, op.getSemAttr(),
+//     op.getScopeAttr() );
 
 //   LLVM_DEBUG({
 //     llvm::dbgs() << "creating tts::atomic_rmw:\n";
@@ -3333,13 +3527,12 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   });
 //   mlir::Value loadResult = atomicOp.getResult();
 
-
 //   // auto loadArry = cast<ShapedType>(ptr.getType()).getShape();
 //   // SmallVector<int64_t> loadShape(loadArry.begin(), loadArry.end());
 
-//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer types.
-//   SmallVector<int64_t> loadShape;
-//   if (auto ptrType = dyn_cast<triton::PointerType>(ptr.getType())) {
+//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer
+//   types. SmallVector<int64_t> loadShape; if (auto ptrType =
+//   dyn_cast<triton::PointerType>(ptr.getType())) {
 //     auto loadArry = cast<ShapedType>(ptrType.getPointeeType()).getShape();
 //     loadShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
 //   } else if (auto ptrType = dyn_cast<ShapedType>(ptr.getType())) {
@@ -3347,9 +3540,9 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //     loadShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
 //   }
 
-
 //   if(ptrState.scalar){ // pure scalar || splated tensor
-//     if((!ptrState.ptrIsTensor) && extractScalarFromLoadedTensor(op, builder, loadResult, loc).failed())
+//     if((!ptrState.ptrIsTensor) && extractScalarFromLoadedTensor(op, builder,
+//     loadResult, loc).failed())
 //       return failure();
 //     op.replaceAllUsesWith(loadResult);
 //     op->erase();
@@ -3363,10 +3556,11 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   }
 //   if(loadShape.size() != ptrState.stateInfo.size()){
 //     llvm::dbgs() << "\033[34m" << "ptr::" << ptr << "\n\033[0m";
-//     llvm::dbgs() << "\033[34m" << "ptrState.stateInfo.size()" << ptrState.stateInfo.size() << "\n\033[0m";
-//     llvm::dbgs() << "\033[34m" << "state中存储的维度为: " << ptrState.stateInfo.size() << "\n\033[0m";
-//       llvm::dbgs() << "\033[34m" << "stride\t\tshape\t\tmask\t\tdim\n" << "\033[0m";
-//       for(auto x : ptrState.stateInfo){
+//     llvm::dbgs() << "\033[34m" << "ptrState.stateInfo.size()" <<
+//     ptrState.stateInfo.size() << "\n\033[0m"; llvm::dbgs() << "\033[34m" <<
+//     "state中存储的维度为: " << ptrState.stateInfo.size() << "\n\033[0m";
+//       llvm::dbgs() << "\033[34m" << "stride\t\tshape\t\tmask\t\tdim\n" <<
+//       "\033[0m"; for(auto x : ptrState.stateInfo){
 //         llvm::dbgs() << "\033[34m" << x.stride << "\t\033[0m";
 //         llvm::dbgs() << "\033[34m" << x.shape << "\t\033[0m";
 //         llvm::dbgs() << "\033[34m" << x.mask << "\t\033[0m";
@@ -3394,7 +3588,8 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   //       transposedShape[i]=loadShape[permuteOrder[i]];
 
 //   //     Value transposeInit = builder.create<tensor::EmptyOp>(
-//   //         loc, transposedShape, cast<RankedTensorType>(loadResult.getType()).getElementType()
+//   //         loc, transposedShape,
+//   cast<RankedTensorType>(loadResult.getType()).getElementType()
 //   //     );
 //   //     loadResult = builder.create<linalg::TransposeOp>(
 //   //         loc, loadResult, transposeInit, permuteOrder).getResults()[0];
@@ -3416,8 +3611,8 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   OpBuilder builder(op);
 
 //   if (!ptr && analysisSplat(op, builder, ptr, ptrState).failed()) {
-//     op->emitRemark("The offset value for the atomic_rmw operation is neither from addptr nor splat");
-//     return failure();
+//     op->emitRemark("The offset value for the atomic_rmw operation is neither
+//     from addptr nor splat"); return failure();
 //   }
 //   auto ptrType = dyn_cast<triton::PointerType>(ptr.getType());
 //   if (ptrType && !isa<ShapedType>(ptrType.getPointeeType())) {
@@ -3442,9 +3637,9 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   }
 
 //   // auto storeShape = cast<ShapedType>(ptr.getType()).getShape();
-//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer types.
-//   SmallVector<int64_t> storeShape;
-//   if (auto ptrType = dyn_cast<triton::PointerType>(ptr.getType())) {
+//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer
+//   types. SmallVector<int64_t> storeShape; if (auto ptrType =
+//   dyn_cast<triton::PointerType>(ptr.getType())) {
 //     auto loadArry = cast<ShapedType>(ptrType.getPointeeType()).getShape();
 //     storeShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
 //   } else if (auto ptrType = dyn_cast<ShapedType>(ptr.getType())) {
@@ -3453,15 +3648,14 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   }
 //   for(auto x : storeShape) storeLen *= x;
 
-
-//   // assert(valLen == storeLen && "Unaligned writes are not currently supported");
-//   if(valLen != storeLen){
-//     llvm::dbgs() << "\033[34m" << "valDims.size() = " << valDims.size() << "\033[0m\n";
-//     for(auto x :valDims){
+//   // assert(valLen == storeLen && "Unaligned writes are not currently
+//   supported"); if(valLen != storeLen){
+//     llvm::dbgs() << "\033[34m" << "valDims.size() = " << valDims.size() <<
+//     "\033[0m\n"; for(auto x :valDims){
 //       llvm::dbgs() << "\033[34m" << x << "\t\033[0m";
 //     }
-//     llvm::dbgs() << "\n\033[34m" << "storeShape.size() = " << storeShape.size() << "\033[0m\n";
-//     for(auto x: storeShape){
+//     llvm::dbgs() << "\n\033[34m" << "storeShape.size() = " <<
+//     storeShape.size() << "\033[0m\n"; for(auto x: storeShape){
 //       llvm::dbgs() << "\033[34m" << x << "\t\033[0m";
 //     }
 //     llvm::dbgs() << "\n" << "\t\033[0m";
@@ -3476,12 +3670,14 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //     }
 //   }
 //   if(needReshape){
-//     auto targetShapeType = RankedTensorType::get(storeShape, cast<ShapedType>(val.getType()).getElementType());
-//     auto targetShapeAttr = DenseIntElementsAttr::get(
-//       RankedTensorType::get({static_cast<int64_t>(storeShape.size())}, builder.getI64Type()), storeShape);
-//     auto targetShape = builder.create<arith::ConstantOp>(loc, targetShapeAttr);
-//     auto reshapeOp = builder.create<tensor::ReshapeOp>(loc, targetShapeType, val, targetShape);
-//     val = reshapeOp.getResult();
+//     auto targetShapeType = RankedTensorType::get(storeShape,
+//     cast<ShapedType>(val.getType()).getElementType()); auto targetShapeAttr =
+//     DenseIntElementsAttr::get(
+//       RankedTensorType::get({static_cast<int64_t>(storeShape.size())},
+//       builder.getI64Type()), storeShape);
+//     auto targetShape = builder.create<arith::ConstantOp>(loc,
+//     targetShapeAttr); auto reshapeOp = builder.create<tensor::ReshapeOp>(loc,
+//     targetShapeType, val, targetShape); val = reshapeOp.getResult();
 //   }
 
 //   auto valType = val.getType();
@@ -3494,9 +3690,9 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   });
 //   mlir::Value loadResult = atomicOp.getResult();
 
-//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer types.
-//   SmallVector<int64_t> loadShape;
-//   if (auto ptrType = dyn_cast<triton::PointerType>(ptr.getType())) {
+//   // Support shape reading for both !ptr<tensor> and tensor<!ptr> pointer
+//   types. SmallVector<int64_t> loadShape; if (auto ptrType =
+//   dyn_cast<triton::PointerType>(ptr.getType())) {
 //     auto loadArry = cast<ShapedType>(ptrType.getPointeeType()).getShape();
 //     loadShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
 //   } else if (auto ptrType = dyn_cast<ShapedType>(ptr.getType())) {
@@ -3504,10 +3700,11 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //     loadShape =  SmallVector<int64_t>(loadArry.begin(), loadArry.end());
 //   }
 
-
-//   // splat的情况下不会直接访问addptr，此时load后的元素类型正确，无需调整，因此当找不到addptr的时候说明使用了splat
+//   //
+//   splat的情况下不会直接访问addptr，此时load后的元素类型正确，无需调整，因此当找不到addptr的时候说明使用了splat
 //   if(ptrState.scalar){
-//     if((!ptrState.ptrIsTensor) && extractScalarFromLoadedTensor(op, builder, loadResult, loc).failed())
+//     if((!ptrState.ptrIsTensor) && extractScalarFromLoadedTensor(op, builder,
+//     loadResult, loc).failed())
 //       return failure();
 //     op.replaceAllUsesWith(loadResult);
 //     op->erase();
@@ -3521,10 +3718,11 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   }
 //   if(loadShape.size() != ptrState.stateInfo.size()){
 //     llvm::dbgs() << "\033[34m" << "ptr::" << ptr << "\n\033[0m";
-//     llvm::dbgs() << "\033[34m" << "ptrState.stateInfo.size()" << ptrState.stateInfo.size() << "\n\033[0m";
-//     llvm::dbgs() << "\033[34m" << "state中存储的维度为: " << ptrState.stateInfo.size() << "\n\033[0m";
-//       llvm::dbgs() << "\033[34m" << "stride\t\tshape\t\tmask\t\tdim\n" << "\033[0m";
-//       for(auto x : ptrState.stateInfo){
+//     llvm::dbgs() << "\033[34m" << "ptrState.stateInfo.size()" <<
+//     ptrState.stateInfo.size() << "\n\033[0m"; llvm::dbgs() << "\033[34m" <<
+//     "state中存储的维度为: " << ptrState.stateInfo.size() << "\n\033[0m";
+//       llvm::dbgs() << "\033[34m" << "stride\t\tshape\t\tmask\t\tdim\n" <<
+//       "\033[0m"; for(auto x : ptrState.stateInfo){
 //         llvm::dbgs() << "\033[34m" << x.stride << "\t\033[0m";
 //         llvm::dbgs() << "\033[34m" << x.shape << "\t\033[0m";
 //         llvm::dbgs() << "\033[34m" << x.mask << "\t\033[0m";
@@ -3543,13 +3741,11 @@ LogicalResult PtrAnalysis::rewriteStoreOp(triton::StoreOp op) {
 //   return success();
 // }
 
-
 /// @brief Rewrite the triton::AddPtrOp to handle unstructured memory access.
 /// @param op The triton::AddPtrOp to be rewritten.
 /// @param adaptor The adaptor of the triton::AddPtrOp, used to get operands.
 /// @param rewriter The pattern rewriter used to modify the IR.
 /// @param data The BlockData containing information about the memory access.
-
 
 /// @brief Check whether the triton::LoadOp has been modified to the specified
 /// state by the AddPtrConverter.
@@ -3564,13 +3760,12 @@ PtrAnalysis::checkModifiedByAddPtrConverter(triton::LoadOp &op) const {
   return success();
 }
 
-
 LogicalResult PtrAnalysis::rewriteOp(Operation *rootOp) {
   LLVM_DEBUG({
     llvm::dbgs() << "rewriting rootOp\n";
     rootOp->dump();
   });
-  
+
   LogicalResult ret = success();
   rootOp->walk<WalkOrder::PreOrder>([&](Operation *op) {
     LLVM_DEBUG({
@@ -3583,9 +3778,9 @@ LogicalResult PtrAnalysis::rewriteOp(Operation *rootOp) {
     return TypeSwitch<Operation *, WalkResult>(op)
         .Case<triton::AddPtrOp>([&](auto addptr) {
           LLVM_DEBUG({
-              llvm::dbgs() << "TypeSwitch AddPtrOp\n";
-              addptr->dump();
-              rootOp->dump();
+            llvm::dbgs() << "TypeSwitch AddPtrOp\n";
+            addptr->dump();
+            rootOp->dump();
           });
           if (rewriteAddptrOp(addptr).failed()) {
             addptr->emitRemark("PtrAnalysis: Failed to rewrite AddPtrOp");
@@ -3610,23 +3805,23 @@ LogicalResult PtrAnalysis::rewriteOp(Operation *rootOp) {
         })
         // .Case<triton::AtomicRMWOp>([&](auto atomic_rmw) {
         //   if (rewriteAtomicRMWOp(atomic_rmw).failed()) {
-        //     atomic_rmw->emitRemark("PtrAnalysis: Failed to rewrite AtomicRMWOp");
-        //     return WalkResult::advance();
+        //     atomic_rmw->emitRemark("PtrAnalysis: Failed to rewrite
+        //     AtomicRMWOp"); return WalkResult::advance();
         //   }
         //   return WalkResult::skip();
         // })
         // .Case<triton::AtomicCASOp>([&](auto atomic_cas) {
         //   if (rewriteAtomicCASOp(atomic_cas).failed()) {
-        //     atomic_cas->emitRemark("PtrAnalysis: Failed to rewrite AtomicCASOp");
-        //     return WalkResult::advance();
+        //     atomic_cas->emitRemark("PtrAnalysis: Failed to rewrite
+        //     AtomicCASOp"); return WalkResult::advance();
         //   }
         //   return WalkResult::skip();
         // })
 
         .Case<scf::ForOp>([&](auto forOp) {
           LLVM_DEBUG({
-             llvm::dbgs() << "before rewriteForOp\n";
-             op->dump();
+            llvm::dbgs() << "before rewriteForOp\n";
+            op->dump();
           });
           if (rewriteForOp(forOp).failed()) {
             forOp->emitRemark("PtrAnalysis: Failed to rewrite ForOp");
@@ -3636,8 +3831,8 @@ LogicalResult PtrAnalysis::rewriteOp(Operation *rootOp) {
         })
         .Case<scf::WhileOp>([&](auto WhileOp) {
           LLVM_DEBUG({
-             llvm::dbgs() << "before rewriteWhileOp\n";
-             op->dump();
+            llvm::dbgs() << "before rewriteWhileOp\n";
+            op->dump();
           });
           if (rewriteWhileOp(WhileOp).failed()) {
             WhileOp->emitRemark("PtrAnalysis: Failed to rewrite WhileOp");
@@ -3655,7 +3850,5 @@ void PtrState::setMemAccTy(const MemAccType &v) { this->memAccTy = v; }
 
 void PtrState::setMemAccVal(const MemAccVal v) { this->memAccTy.value = v; }
 
-
-
-} // namespace tts
+} // namespace triton_linearize
 } // namespace mlir

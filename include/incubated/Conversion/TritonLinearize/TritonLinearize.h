@@ -7,7 +7,6 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
-
 namespace mlir {
 namespace triton {
 

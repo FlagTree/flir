@@ -30,7 +30,7 @@
 
 namespace mlir {
 namespace triton {
-namespace Incubated { 
+namespace Incubated {
 enum class UseType {
   Undefined, // Initial state
   DataUse,   // value used for tensor computation only

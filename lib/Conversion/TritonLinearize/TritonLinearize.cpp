@@ -20,16 +20,16 @@
  * THE SOFTWARE.
  */
 
+#include "TritonLinearize/TritonLinearize.h"
 #include "Utils/Utils.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
-#include "TritonLinearize/TritonLinearize.h"
 
 #include "llvm/ADT/SmallVectorExtras.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/FormatVariadic.h"
 #include <utility>
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -40,11 +40,8 @@
 #include "mlir/Dialect/Utils/ReshapeOpsUtils.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/ValueRange.h"
-//#include "TritonLinearize/OpFoldResultUtils.h"
+// #include "TritonLinearize/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
-namespace mlir{
-namespace triton{
-
-}
-}
-
+namespace mlir {
+namespace triton {}
+} // namespace mlir

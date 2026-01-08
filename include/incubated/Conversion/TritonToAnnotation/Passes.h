@@ -23,8 +23,8 @@
 #ifndef TRITON_TO_ANNOTATION_CONVERSION_PASSES_H
 #define TRITON_TO_ANNOTATION_CONVERSION_PASSES_H
 
-#include "mlir/Pass/Pass.h"
 #include "incubated/Conversion/TritonToAnnotation/TritonToAnnotation.h"
+#include "mlir/Pass/Pass.h"
 namespace mlir {
 // Forward declarations.
 
