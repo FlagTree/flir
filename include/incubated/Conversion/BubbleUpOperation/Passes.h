@@ -23,7 +23,7 @@
 #ifndef TRITON_ADAPTER_TRITON_TO_UNSTRUCTURE_CONVERSION_PASSES_H
 #define TRITON_ADAPTER_TRITON_TO_UNSTRUCTURE_CONVERSION_PASSES_H
 
-#include "BubbleUpOperation.h"
+#include "incubated/Conversion/BubbleUpOperation.h"
 
 namespace mlir {
 namespace triton {

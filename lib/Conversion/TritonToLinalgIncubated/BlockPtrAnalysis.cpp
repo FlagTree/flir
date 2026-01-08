@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  */
 
-#include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
-#include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/BlockPtrAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "incubated/Conversion/UtilsIncubated/Utils.h"
 #if __has_include("bishengir/Dialect/Annotation/IR/Annotation.h")
 #include "bishengir/Dialect/Annotation/IR/Annotation.h"

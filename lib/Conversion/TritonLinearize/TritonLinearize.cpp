@@ -20,7 +20,7 @@
  * THE SOFTWARE.
  */
 
-#include "TritonLinearize/TritonLinearize.h"
+#include "incubated/Conversion/TritonLinearize/TritonLinearize.h"
 #include "Utils/Utils.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 
@@ -40,7 +40,7 @@
 #include "mlir/Dialect/Utils/ReshapeOpsUtils.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/ValueRange.h"
-// #include "TritonLinearize/OpFoldResultUtils.h"
+// #include "incubated/Conversion/TritonLinearize/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 namespace mlir {
 namespace triton {}

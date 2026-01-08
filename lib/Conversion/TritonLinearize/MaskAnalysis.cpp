@@ -20,8 +20,8 @@
  * THE SOFTWARE.
  */
 
-#include "TritonLinearize/MaskAnalysis.h"
-#include "TritonLinearize/OpFoldResultUtils.h"
+#include "incubated/Conversion/TritonLinearize/MaskAnalysis.h"
+#include "incubated/Conversion/TritonLinearize/OpFoldResultUtils.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Support/LogicalResult.h"

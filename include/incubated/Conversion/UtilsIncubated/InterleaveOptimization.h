@@ -22,9 +22,9 @@
 
 #pragma once
 
-#include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
-#include "TritonToLinalgIncubated/MaskAnalysis.h"
-#include "TritonToLinalgIncubated/UseAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/BlockPtrAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/MaskAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/UseAnalysis.h"
 #include "incubated/Conversion/UtilsIncubated/Utils.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"

@@ -20,7 +20,7 @@
  * THE SOFTWARE.
  */
 
-#include "TritonLinearize/OpFoldResultUtils.h"
+#include "incubated/Conversion/TritonLinearize/OpFoldResultUtils.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/BuiltinAttributes.h"
