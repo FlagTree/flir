@@ -38,9 +38,9 @@
 #include "triton-shared/Analysis/MaskAnalysis.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 
-#include "Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 #include "incubated/Conversion/TritonLinearize/PtrAnalysis.h"
 #include "incubated/Conversion/TritonLinearize/TritonLinearize.h"
+#include "triton-shared/Dialect/TritonStructured/IR/TritonStructuredDialect.h"
 
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Bufferization/IR/Bufferization.h"
