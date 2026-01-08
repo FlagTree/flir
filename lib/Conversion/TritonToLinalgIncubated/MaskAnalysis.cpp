@@ -20,7 +20,7 @@
  * THE SOFTWARE.
  */
 
-#include "TritonToLinalgIncubated/MaskAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/MaskAnalysis.h"
 #include "incubated/Conversion/UtilsIncubated/Utils.h"
 
 #include "triton/Dialect/Triton/IR/Dialect.h"

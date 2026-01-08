@@ -21,8 +21,8 @@
  * THE SOFTWARE.
  */
 
-#include "TritonToLinalgIncubated/HoistBroadcast.h"
-#include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/HoistBroadcast.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "incubated/Conversion/UtilsIncubated/Utils.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 

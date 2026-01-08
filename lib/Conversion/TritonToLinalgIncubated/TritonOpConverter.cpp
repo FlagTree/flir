@@ -21,10 +21,10 @@
  * THE SOFTWARE.
  */
 
-#include "TritonToLinalgIncubated/TritonOpConverter.h"
-#include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
-#include "TritonToLinalgIncubated/MaskAnalysis.h"
-#include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/TritonOpConverter.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/BlockPtrAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/MaskAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "incubated/Conversion/UtilsIncubated/Utils.h"
 #include "mlir/Dialect/Complex/IR/Complex.h"
 #include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"

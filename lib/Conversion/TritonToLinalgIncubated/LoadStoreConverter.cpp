@@ -26,10 +26,10 @@
 #include "mlir/Dialect/SPIRV/IR/SPIRVEnums.h"
 #include "mlir/Dialect/Vector/Transforms/VectorTransforms.h"
 
-#include "TritonToLinalgIncubated/BlockPtrAnalysis.h"
-#include "TritonToLinalgIncubated/LoadStoreConverter.h"
-#include "TritonToLinalgIncubated/MaskAnalysis.h"
-#include "TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/BlockPtrAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/LoadStoreConverter.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/MaskAnalysis.h"
+#include "incubated/Conversion/TritonToLinalgIncubated/TritonToLinalgIncubatedPass.h"
 #include "incubated/Conversion/UtilsIncubated/InterleaveOptimization.h"
 #include "incubated/Conversion/UtilsIncubated/Utils.h"
 #if __has_include("bishengir/Dialect/Annotation/IR/Annotation.h")
