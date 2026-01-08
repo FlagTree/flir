@@ -1,0 +1,8 @@
+add_subdirectory(TritonToAnnotation)
+add_subdirectory(TritonToLinalgIncubated)
+add_subdirectory(DiscreteMaskAccessConversion)
+add_subdirectory(TritonToUnstructureIncubated)
+add_subdirectory(TritonLinearize)
+add_subdirectory(BubbleUpOperation)
+add_subdirectory(UtilsIncubated)
+
