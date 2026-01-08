@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -247,9 +247,9 @@ public:
                         const llvm::SmallDenseMap<Value, BlockData> &known);
 
   static void parseSelect(arith::SelectOp op, BlockData &data,
-                        const Location &loc,
-                        ConversionPatternRewriter &rewriter,
-                        const llvm::SmallDenseMap<Value, BlockData> &known);
+                          const Location &loc,
+                          ConversionPatternRewriter &rewriter,
+                          const llvm::SmallDenseMap<Value, BlockData> &known);
 
   static void rewriteAddPtr(triton::AddPtrOp op,
                             triton::AddPtrOp::Adaptor &adaptor,
