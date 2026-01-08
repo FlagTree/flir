@@ -2,7 +2,6 @@
 #define TRITON_ADAPTER_TRITON_LINEARIZE_PASSES_H
 
 #include "incubated/Conversion/TritonLinearize/TritonLinearize.h"
-#include "incubated/Conversion/TritonLinearize/TritonLinearize.h"
 namespace mlir {
 namespace triton {
 

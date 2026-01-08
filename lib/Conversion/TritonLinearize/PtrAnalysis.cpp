@@ -41,8 +41,8 @@
 #include <string>
 #include <utility>
 
-#include "incubated/Conversion/TritonLinearize/PtrAnalysis.h"
 #include "Utils/Utils.h"
+#include "incubated/Conversion/TritonLinearize/PtrAnalysis.h"
 #include "triton-shared/Analysis/MaskAnalysis.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 
