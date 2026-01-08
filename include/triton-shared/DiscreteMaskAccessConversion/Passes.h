@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@
 #ifndef TRITON_ADAPTER_DISCRETE_MASK_ACCESS_CONVERSION_PASSES_H
 #define TRITON_ADAPTER_DISCRETE_MASK_ACCESS_CONVERSION_PASSES_H
 
-// #include "DiscreteMaskAccessConversionPass.h"
 #include "triton-shared/DiscreteMaskAccessConversion/DiscreteMaskAccessConversionPass.h"
 
 namespace mlir {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+ * Copyright (c) Huawei Technologies Co., Ltd. 2025.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,11 +20,8 @@
  * THE SOFTWARE.
  */
 
-// #include "DiscreteMaskAccessConversion/Passes.h"
 #include "triton-shared/DiscreteMaskAccessConversion/Passes.h"
-// #include "Utils/Utils.h"
 #include "triton-shared/UtilsIncubated/Utils.h"
-// #include "TritonToLinalg/MaskAnalysis.h"
 #include "triton-shared/TritonToLinalgIncubated/MaskAnalysis.h"
 
 #if __has_include("bishengir/Dialect/HIVM/IR/HIVM.h")
@@ -67,8 +64,8 @@ LogicalResult isDiscreteMask(Operation *op, Value mask,
 struct DiscreteMaskStoreConversion : OpRewritePattern<triton::StoreOp> {
   using OpRewritePattern<triton::StoreOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(triton::StoreOp op,
-                                PatternRewriter &rewriter) const final {
+LogicalResult matchAndRewrite(triton::StoreOp op,
+                              PatternRewriter &rewriter) const final {
   auto mask = op.getMask();
   auto loc = op.getLoc();
   auto dst = op.getPtr();

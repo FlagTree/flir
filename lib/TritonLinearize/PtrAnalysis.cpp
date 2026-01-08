@@ -41,10 +41,8 @@
 #include <queue>
 #include <string>
 
-//#include "TritonLinearize/MaskAnalysis.h"
 #include "triton-shared/Analysis/MaskAnalysis.h"
 #include "TritonLinearize/PtrAnalysis.h"
-//#include "TritonLinearize/OpFoldResultUtils.h"
 #include "triton-shared/Analysis/OpFoldResultUtils.h"
 #include "Utils/Utils.h"
 
